@@ -13,8 +13,9 @@ interface CPFModalProps {
 }
 
 export const CPFModal = ({ isOpen, onClose, onAddCPF }: CPFModalProps) => {
-  const { customerData, updateCPF } = useCustomer();
+  const { customerData, updateCPF, saveCustomerData } = useCustomer();
   const [cpf, setCpf] = useState(customerData?.cpf || '');
+  const [name, setName] = useState(customerData?.name || '');
 
   const formatCPF = (value: string) => {
     const numbers = value.replace(/\D/g, '');
@@ -35,17 +36,29 @@ export const CPFModal = ({ isOpen, onClose, onAddCPF }: CPFModalProps) => {
       return;
     }
     
-    // Salvar CPF no contexto
+    // Validar nome
+    if (!name || name.trim() === '') {
+      toast.error('Nome é obrigatório');
+      return;
+    }
+    
+    // Salvar CPF e nome no contexto
     updateCPF(cpf);
+    saveCustomerData({ name: name.trim() });
     
     onAddCPF(cpf);
-    toast.success('CPF adicionado com sucesso!', { id: 'cpf-saved' });
+    toast.success('CPF e nome adicionados com sucesso!', { id: 'cpf-saved' });
   };
 
-  // Carregar CPF do contexto quando modal abrir
+  // Carregar CPF e nome do contexto quando modal abrir
   useEffect(() => {
-    if (isOpen && customerData?.cpf) {
-      setCpf(customerData.cpf);
+    if (isOpen) {
+      if (customerData?.cpf) {
+        setCpf(customerData.cpf);
+      }
+      if (customerData?.name) {
+        setName(customerData.name);
+      }
     }
   }, [isOpen, customerData]);
 
@@ -76,7 +89,7 @@ export const CPFModal = ({ isOpen, onClose, onAddCPF }: CPFModalProps) => {
                 <div className="flex items-center gap-2">
                   <CreditCard className="w-5 h-5 text-primary" />
                   <h3 className="text-lg font-semibold">
-                    Adicionar CPF
+                    Dados para nota fiscal
                   </h3>
                 </div>
                 <button
@@ -89,6 +102,20 @@ export const CPFModal = ({ isOpen, onClose, onAddCPF }: CPFModalProps) => {
 
               {/* Form */}
               <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Nome completo *</Label>
+                  <Input
+                    id="name"
+                    placeholder="Seu nome completo"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Necessário para emissão da nota fiscal
+                  </p>
+                </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="cpf">CPF *</Label>
                   <Input
