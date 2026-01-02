@@ -53,22 +53,27 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
         try {
           setIsProcessing(true);
           
-          // Validar dados do cliente antes de criar transação
-          if (!customerData.cpf) {
-            throw new Error('CPF não informado. Preencha seus dados antes de pagar.');
+          // Validar dados do cliente antes de criar transação (validação rigorosa)
+          const cpfNormalized = customerData.cpf?.replace(/\D/g, '') || '';
+          if (!customerData.cpf || cpfNormalized.length !== 11) {
+            throw new Error('CPF não informado ou inválido. Preencha seu CPF antes de pagar.');
+          }
+          
+          if (!customerData.name || customerData.name.trim() === '') {
+            throw new Error('Nome não informado. Preencha seu nome antes de pagar.');
           }
           
           if (!customerData.address) {
             throw new Error('Endereço não informado. Preencha seu endereço antes de pagar.');
           }
           
-          // Log explícito para debug (conforme tutorial)
+          // Log explícito para debug (conforme tutorial) - APENAS SE PASSAR VALIDAÇÃO
           console.log('📋 Dados para transação:', {
             customer: {
               name: customerData.name,
-              email: customerData.email,
-              phone: customerData.phone,
-              cpf: customerData.cpf?.substring(0, 3) + '***',
+              email: customerData.email || '(não informado)',
+              phone: customerData.phone || '(não informado)',
+              cpf: cpfNormalized.substring(0, 3) + '***',
             },
             itemsCount: items.length,
             totalPrice: finalPrice,
