@@ -62,11 +62,17 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
             throw new Error('Endereço não informado. Preencha seu endereço antes de pagar.');
           }
           
+          // Log explícito para debug (conforme tutorial)
           console.log('📋 Dados para transação:', {
-            customer: customerData.name,
-            cpf: customerData.cpf?.substring(0, 3) + '***',
+            customer: {
+              name: customerData.name,
+              email: customerData.email,
+              phone: customerData.phone,
+              cpf: customerData.cpf?.substring(0, 3) + '***',
+            },
             itemsCount: items.length,
             totalPrice: finalPrice,
+            hasAddress: !!customerData.address,
           });
           
           // Criar transação no UmbrellaPag
