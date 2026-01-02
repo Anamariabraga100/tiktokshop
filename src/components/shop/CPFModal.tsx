@@ -44,19 +44,36 @@ export const CPFModal = ({ isOpen, onClose, onAddCPF }: CPFModalProps) => {
     
     // Salvar CPF e nome juntos no contexto (garantir que ambos sejam salvos simultaneamente)
     const trimmedName = name.trim();
-    console.log('📝 Salvando no CPFModal:', { cpf, name: trimmedName });
+    const normalizedCPF = cpf.replace(/\D/g, '');
     
+    console.log('📝 Salvando no CPFModal:', { cpf: normalizedCPF, name: trimmedName });
+    
+    // Salvar dados
     saveCustomerData({ 
-      cpf: cpf,
+      cpf: cpf, // Manter formatação para exibição
       name: trimmedName 
     });
     
-    // Aguardar um tick para garantir que o estado seja atualizado
+    // Verificar se foi salvo corretamente após um pequeno delay
     setTimeout(() => {
-      console.log('✅ Dados salvos, fechando modal');
-      onAddCPF(cpf);
-      toast.success('CPF e nome adicionados com sucesso!', { id: 'cpf-saved' });
-    }, 100);
+      const saved = localStorage.getItem('customer_data');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        console.log('🔍 Verificando dados salvos:', parsed);
+        
+        if (parsed.cpf && parsed.name) {
+          console.log('✅ Dados confirmados no localStorage');
+          onAddCPF(cpf);
+          toast.success('CPF e nome adicionados com sucesso!', { id: 'cpf-saved' });
+        } else {
+          console.error('❌ Dados não foram salvos corretamente:', parsed);
+          toast.error('Erro ao salvar dados. Tente novamente.', { id: 'cpf-error' });
+        }
+      } else {
+        console.error('❌ Nenhum dado encontrado no localStorage');
+        toast.error('Erro ao salvar dados. Tente novamente.', { id: 'cpf-error' });
+      }
+    }, 200);
   };
 
   // Carregar CPF e nome do contexto quando modal abrir

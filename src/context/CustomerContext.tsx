@@ -47,13 +47,14 @@ export const CustomerProvider = ({ children }: { children: ReactNode }) => {
           const parsed = JSON.parse(stored);
           setCustomerData(parsed);
           
-          // Se tiver CPF, tenta sincronizar com Supabase
-          if (parsed.cpf) {
+          // Se tiver CPF, tenta sincronizar com Supabase (apenas se dados locais não tiverem nome)
+          // Isso evita sobrescrever dados recém-salvos
+          if (parsed.cpf && !parsed.name) {
             const supabaseData = await getCustomerFromSupabase(parsed.cpf);
-            if (supabaseData) {
-              // Atualiza com dados do Supabase (mais recentes), mas preserva dados locais se Supabase não tiver
+            if (supabaseData && supabaseData.name) {
+              // Só atualiza se Supabase tiver nome e local não tiver
               const syncedData: CustomerData = {
-                name: supabaseData.name || parsed.name,
+                name: supabaseData.name,
                 email: supabaseData.email || parsed.email,
                 phone: supabaseData.phone || parsed.phone,
                 cpf: supabaseData.cpf || parsed.cpf,
@@ -102,12 +103,23 @@ export const CustomerProvider = ({ children }: { children: ReactNode }) => {
 
   const saveCustomerData = (data: Partial<CustomerData>) => {
     console.log('💾 Salvando dados do cliente:', { data, currentData: customerData });
+    
+    // Atualizar estado de forma síncrona
     setCustomerData((prev) => {
       const newData: CustomerData = {
         ...prev,
         ...data,
         createdAt: prev?.createdAt || new Date().toISOString(),
       };
+      
+      // ATUALIZAR LOCALSTORAGE IMEDIATAMENTE (não esperar pelo useEffect)
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(newData));
+        console.log('✅ localStorage atualizado imediatamente:', newData);
+      } catch (error) {
+        console.error('❌ Erro ao salvar no localStorage:', error);
+      }
+      
       console.log('✅ Dados atualizados no estado:', newData);
       return newData;
     });
