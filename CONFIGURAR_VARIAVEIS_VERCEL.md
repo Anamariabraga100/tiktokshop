@@ -1,0 +1,90 @@
+# 🔧 Configurar Variáveis de Ambiente na Vercel
+
+## 📍 Localização
+
+1. No dashboard da Vercel, clique no seu projeto **tiktokshop**
+2. Vá em **Settings** (Configurações) no menu superior
+3. Clique em **Environment Variables** (Variáveis de Ambiente) no menu lateral
+
+## ✅ Variáveis Obrigatórias
+
+### 1. API Key do UmbrellaPag
+
+Esta é a **mais importante** para o pagamento PIX funcionar:
+
+```
+Key: UMBRELLAPAG_API_KEY
+Value: 044d7262-218b-4a1b-a8ca-e9c8685ee0b7
+```
+
+**Importante:** 
+- ✅ Marque todas as opções: **Production**, **Preview**, **Development**
+- ✅ Clique em **Save**
+
+### 2. (Opcional) Supabase - Se quiser usar
+
+```
+Key: VITE_SUPABASE_URL
+Value: https://kgeseoccvpzwqqhcbups.supabase.co
+```
+
+```
+Key: VITE_SUPABASE_ANON_KEY
+Value: sb_publishable_I5P7uC0u8eZEP_2vWSUtVQ_8fne35AP
+```
+
+## 🔄 Aplicar as Variáveis
+
+**IMPORTANTE:** Após adicionar as variáveis, você precisa fazer um **novo deploy**:
+
+### Opção 1: Redeploy (Rápido)
+
+1. Vá em **Deployments** no menu
+2. Clique nos **três pontos (...)** do último deploy
+3. Clique em **Redeploy**
+4. Selecione **Use existing Build Cache** (opcional, mais rápido)
+5. Clique em **Redeploy**
+
+### Opção 2: Novo Commit (Automático)
+
+1. Faça qualquer mudança pequena (ou apenas toque em um arquivo)
+2. Faça commit e push:
+   ```bash
+   git commit --allow-empty -m "Trigger redeploy with env vars"
+   git push
+   ```
+3. A Vercel fará deploy automático
+
+## ✅ Verificar se Funcionou
+
+Após o redeploy:
+
+1. Vá em **Deployments**
+2. Clique no novo deploy
+3. Vá em **Functions** → `/api/create-pix-transaction`
+4. Se aparecer a função, está funcionando!
+5. Teste criando um pedido PIX no site
+
+## 🔍 Troubleshooting
+
+### Variável não está sendo usada?
+
+- Verifique se marcou **Production**, **Preview** e **Development**
+- Faça um redeploy após adicionar as variáveis
+- Verifique os logs da função serverless
+
+### Erro "API Key não configurada"?
+
+- Verifique se adicionou `UMBRELLAPAG_API_KEY` (sem VITE_)
+- Verifique se fez redeploy após adicionar
+- Verifique os logs em Functions → `/api/create-pix-transaction`
+
+## 📝 Resumo Rápido
+
+1. ✅ Settings → Environment Variables
+2. ✅ Adicionar `UMBRELLAPAG_API_KEY`
+3. ✅ Marcar todas as environments
+4. ✅ Save
+5. ✅ Redeploy
+6. ✅ Testar!
+

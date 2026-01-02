@@ -68,28 +68,6 @@ export const CustomerProvider = ({ children }: { children: ReactNode }) => {
           console.error('Erro ao carregar dados do cliente:', error);
           localStorage.removeItem(STORAGE_KEY);
         }
-      } else {
-        // Se não há dados salvos, criar dados de teste em desenvolvimento
-        // (apenas para facilitar testes - remover em produção)
-        if (import.meta.env.DEV) {
-          const testData: CustomerData = {
-            name: 'João da Silva',
-            email: 'joao.silva@exemplo.com',
-            phone: '11987654321',
-            cpf: '12345678909',
-            address: {
-              cep: '01310-100',
-              rua: 'Avenida Paulista',
-              numero: '1000',
-              complemento: 'Apto 101',
-              bairro: 'Bela Vista',
-              cidade: 'São Paulo',
-              estado: 'SP',
-            },
-          };
-          setCustomerData(testData);
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(testData));
-        }
       }
     };
 

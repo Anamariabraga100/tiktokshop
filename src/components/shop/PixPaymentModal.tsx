@@ -63,8 +63,35 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
             throw new Error('Nome não informado. Preencha seu nome antes de pagar.');
           }
           
+          // Validar endereço completo (todos os campos obrigatórios)
           if (!customerData.address) {
-            throw new Error('Endereço não informado. Preencha seu endereço antes de pagar.');
+            throw new Error('Endereço não informado. Preencha seu endereço de entrega antes de pagar.');
+          }
+          
+          const address = customerData.address;
+          const missingFields: string[] = [];
+          
+          if (!address.cep || address.cep.replace(/\D/g, '').length !== 8) {
+            missingFields.push('CEP');
+          }
+          if (!address.rua || address.rua.trim() === '') {
+            missingFields.push('Rua');
+          }
+          if (!address.numero || address.numero.trim() === '') {
+            missingFields.push('Número');
+          }
+          if (!address.bairro || address.bairro.trim() === '') {
+            missingFields.push('Bairro');
+          }
+          if (!address.cidade || address.cidade.trim() === '') {
+            missingFields.push('Cidade');
+          }
+          if (!address.estado || address.estado.trim() === '') {
+            missingFields.push('Estado');
+          }
+          
+          if (missingFields.length > 0) {
+            throw new Error(`Endereço incompleto. Preencha os seguintes campos: ${missingFields.join(', ')}.`);
           }
           
           // Log explícito para debug (conforme tutorial) - APENAS SE PASSAR VALIDAÇÃO
