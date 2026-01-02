@@ -43,13 +43,20 @@ export const CPFModal = ({ isOpen, onClose, onAddCPF }: CPFModalProps) => {
     }
     
     // Salvar CPF e nome juntos no contexto (garantir que ambos sejam salvos simultaneamente)
+    const trimmedName = name.trim();
+    console.log('📝 Salvando no CPFModal:', { cpf, name: trimmedName });
+    
     saveCustomerData({ 
       cpf: cpf,
-      name: name.trim() 
+      name: trimmedName 
     });
     
-    onAddCPF(cpf);
-    toast.success('CPF e nome adicionados com sucesso!', { id: 'cpf-saved' });
+    // Aguardar um tick para garantir que o estado seja atualizado
+    setTimeout(() => {
+      console.log('✅ Dados salvos, fechando modal');
+      onAddCPF(cpf);
+      toast.success('CPF e nome adicionados com sucesso!', { id: 'cpf-saved' });
+    }, 100);
   };
 
   // Carregar CPF e nome do contexto quando modal abrir

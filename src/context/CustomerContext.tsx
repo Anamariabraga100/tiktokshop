@@ -22,7 +22,7 @@ export interface CustomerData {
 
 interface CustomerContextType {
   customerData: CustomerData | null;
-  saveCustomerData: (data: CustomerData) => void;
+  saveCustomerData: (data: Partial<CustomerData>) => void;
   updateAddress: (address: Address) => void;
   updateCPF: (cpf: string) => void;
   clearCustomerData: () => void;
@@ -51,14 +51,14 @@ export const CustomerProvider = ({ children }: { children: ReactNode }) => {
           if (parsed.cpf) {
             const supabaseData = await getCustomerFromSupabase(parsed.cpf);
             if (supabaseData) {
-              // Atualiza com dados do Supabase (mais recentes)
+              // Atualiza com dados do Supabase (mais recentes), mas preserva dados locais se Supabase não tiver
               const syncedData: CustomerData = {
-                name: supabaseData.name,
-                email: supabaseData.email,
-                phone: supabaseData.phone,
-                cpf: supabaseData.cpf,
-                address: supabaseData.address as Address | undefined,
-                createdAt: supabaseData.created_at,
+                name: supabaseData.name || parsed.name,
+                email: supabaseData.email || parsed.email,
+                phone: supabaseData.phone || parsed.phone,
+                cpf: supabaseData.cpf || parsed.cpf,
+                address: (supabaseData.address as Address | undefined) || parsed.address,
+                createdAt: supabaseData.created_at || parsed.createdAt,
               };
               setCustomerData(syncedData);
               localStorage.setItem(STORAGE_KEY, JSON.stringify(syncedData));
@@ -100,13 +100,17 @@ export const CustomerProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [customerData]);
 
-  const saveCustomerData = (data: CustomerData) => {
-    const newData: CustomerData = {
-      ...customerData,
-      ...data,
-      createdAt: customerData?.createdAt || new Date().toISOString(),
-    };
-    setCustomerData(newData);
+  const saveCustomerData = (data: Partial<CustomerData>) => {
+    console.log('💾 Salvando dados do cliente:', { data, currentData: customerData });
+    setCustomerData((prev) => {
+      const newData: CustomerData = {
+        ...prev,
+        ...data,
+        createdAt: prev?.createdAt || new Date().toISOString(),
+      };
+      console.log('✅ Dados atualizados no estado:', newData);
+      return newData;
+    });
   };
 
   const updateAddress = (address: Address) => {
@@ -133,7 +137,14 @@ export const CustomerProvider = ({ children }: { children: ReactNode }) => {
   const hasAddress = useMemo(() => !!customerData?.address, [customerData?.address]);
   // hasCPF agora verifica tanto CPF quanto nome (ambos são obrigatórios para PIX)
   const hasCPF = useMemo(() => {
-    return !!(customerData?.cpf && customerData?.name && customerData.name.trim() !== '');
+    const result = !!(customerData?.cpf && customerData?.name && customerData.name.trim() !== '');
+    console.log('🔍 hasCPF verificado:', { 
+      hasCPF: result, 
+      cpf: customerData?.cpf, 
+      name: customerData?.name,
+      nameTrimmed: customerData?.name?.trim() 
+    });
+    return result;
   }, [customerData?.cpf, customerData?.name]);
 
   return (
