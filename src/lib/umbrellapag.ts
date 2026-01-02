@@ -229,6 +229,22 @@ export const createPixTransaction = async (
     metadata,
   };
 
+  // Log explícito do payload ANTES do fetch (conforme tutorial)
+  console.log('PAYLOAD PIX FRONTEND:', {
+    customer: {
+      name: payload.customer.name,
+      email: payload.customer.email,
+      phone: payload.customer.phone,
+      cpf: payload.customer.cpf ? payload.customer.cpf.substring(0, 3) + '***' : 'não informado',
+    },
+    items: payload.items.map(item => ({
+      name: item.name,
+      price: item.price,
+      quantity: item.quantity,
+    })),
+    totalPrice: payload.totalPrice,
+  });
+
   console.log('🚀 Criando transação PIX via backend:', {
     endpoint,
     customer: payload.customer.name,
