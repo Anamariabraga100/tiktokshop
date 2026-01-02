@@ -193,29 +193,48 @@ export const createPixTransaction = async (
   totalPrice: number,
   metadata?: Record<string, any>
 ): Promise<UmbrellaPagTransaction> => {
-  const customer = convertCustomerToUmbrellaPag(customerData);
-  if (!customer) {
-    throw new Error('Dados do cliente incompletos');
+  // Validar dados antes de enviar
+  if (!customerData || !customerData.cpf || !customerData.name) {
+    throw new Error('Dados do cliente incompletos. CPF e nome são obrigatórios.');
   }
 
-  const umbrellaItems = convertItemsToUmbrellaPag(items);
-  if (umbrellaItems.length === 0) {
+  if (!items || items.length === 0) {
     throw new Error('Carrinho vazio');
   }
 
-  // Converter totalPrice para centavos
-  const amountInCents = Math.round(totalPrice * 100);
+  if (!totalPrice || totalPrice <= 0) {
+    throw new Error('Valor inválido');
+  }
 
   // Usar a função serverless da Vercel (/api/create-pix-transaction)
   // Isso evita problemas de CORS e mantém a API Key segura no backend
   const apiUrl = import.meta.env.VITE_API_URL || '/api';
   const endpoint = `${apiUrl}/create-pix-transaction`;
 
+  // Preparar payload no formato correto que o backend espera
+  const payload = {
+    customer: {
+      name: customerData.name || 'Cliente',
+      email: customerData.email || '',
+      phone: customerData.phone || '',
+      cpf: customerData.cpf?.replace(/\D/g, '') || '',
+      address: customerData.address,
+    },
+    items: items.map(item => ({
+      name: item.name,
+      price: item.price,
+      quantity: item.quantity,
+    })),
+    totalPrice: totalPrice,
+    metadata,
+  };
+
   console.log('🚀 Criando transação PIX via backend:', {
     endpoint,
-    amount: amountInCents,
-    customer: customer.name,
-    itemsCount: umbrellaItems.length,
+    customer: payload.customer.name,
+    cpf: payload.customer.cpf ? payload.customer.cpf.substring(0, 3) + '***' : 'não informado',
+    itemsCount: payload.items.length,
+    totalPrice: payload.totalPrice,
   });
 
   let response: Response;
@@ -227,12 +246,7 @@ export const createPixTransaction = async (
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        customerData,
-        items,
-        totalPrice,
-        metadata,
-      }),
+      body: JSON.stringify(payload),
     });
   } catch (fetchError: any) {
     // Erro de rede (conexão, etc.)
@@ -259,13 +273,15 @@ export const createPixTransaction = async (
     status: response.status,
     ok: response.ok,
     resultStatus: result.status,
+    success: result.success,
     hasData: !!result.data,
+    hasPixCode: !!result.pixCode,
     message: result.message,
     error: result.error,
   });
 
-  if (!response.ok) {
-    const errorMessage = result?.message || `Erro HTTP ${response.status}: ${response.statusText}`;
+  if (!response.ok || !result.success) {
+    const errorMessage = result?.message || result?.error || `Erro HTTP ${response.status}: ${response.statusText}`;
     console.error('❌ Erro na resposta do backend:', errorMessage, result);
     throw new Error(errorMessage);
   }
@@ -276,9 +292,18 @@ export const createPixTransaction = async (
     throw new Error(errorMessage);
   }
 
-  // Verificar se tem QR Code na resposta
-  const qrCode = result.data.qrCode || result.data.pix?.qrCode;
-  if (!qrCode) {
+  // Verificar se tem QR Code na resposta (pode estar em diferentes campos)
+  const qrCode = result.pixCode || result.data?.pix?.qrCode || result.data?.qrCode;
+  if (qrCode) {
+    // Adicionar QR Code aos dados se não estiver lá
+    if (!result.data.qrCode && !result.data.pix?.qrCode) {
+      result.data.qrCode = qrCode;
+      if (!result.data.pix) {
+        result.data.pix = {};
+      }
+      result.data.pix.qrCode = qrCode;
+    }
+  } else {
     console.warn('⚠️ Transação criada, mas sem QR Code:', result.data);
     // Não lançar erro, apenas avisar - o QR Code pode ser gerado depois
   }
