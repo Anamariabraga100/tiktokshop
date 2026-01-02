@@ -13,7 +13,7 @@ interface CPFModalProps {
 }
 
 export const CPFModal = ({ isOpen, onClose, onAddCPF }: CPFModalProps) => {
-  const { customerData, updateCPF, saveCustomerData } = useCustomer();
+  const { customerData, saveCustomerData } = useCustomer();
   const [cpf, setCpf] = useState(customerData?.cpf || '');
   const [name, setName] = useState(customerData?.name || '');
 
@@ -42,9 +42,11 @@ export const CPFModal = ({ isOpen, onClose, onAddCPF }: CPFModalProps) => {
       return;
     }
     
-    // Salvar CPF e nome no contexto
-    updateCPF(cpf);
-    saveCustomerData({ name: name.trim() });
+    // Salvar CPF e nome juntos no contexto (garantir que ambos sejam salvos simultaneamente)
+    saveCustomerData({ 
+      cpf: cpf,
+      name: name.trim() 
+    });
     
     onAddCPF(cpf);
     toast.success('CPF e nome adicionados com sucesso!', { id: 'cpf-saved' });

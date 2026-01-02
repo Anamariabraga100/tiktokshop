@@ -131,7 +131,10 @@ export const CustomerProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const hasAddress = useMemo(() => !!customerData?.address, [customerData?.address]);
-  const hasCPF = useMemo(() => !!customerData?.cpf, [customerData?.cpf]);
+  // hasCPF agora verifica tanto CPF quanto nome (ambos são obrigatórios para PIX)
+  const hasCPF = useMemo(() => {
+    return !!(customerData?.cpf && customerData?.name && customerData.name.trim() !== '');
+  }, [customerData?.cpf, customerData?.name]);
 
   return (
     <CustomerContext.Provider

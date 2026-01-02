@@ -314,11 +314,14 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                           <span className="text-sm font-medium">+ Adicionar CPF</span>
                         </button>
                       )}
-                      {hasCPF && customerData?.cpf && (
+                      {hasCPF && customerData?.cpf && customerData?.name && (
                         <div className="w-full p-4 bg-success/10 rounded-xl border border-success/20 flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <CheckCircle2 className="w-5 h-5 text-success" />
-                            <span className="text-sm font-medium text-success">CPF: {customerData.cpf}</span>
+                            <div className="flex flex-col">
+                              <span className="text-sm font-medium text-success">{customerData.name}</span>
+                              <span className="text-xs text-muted-foreground">CPF: {customerData.cpf}</span>
+                            </div>
                           </div>
                           <button
                             onClick={() => setShowCPFModal(true)}
