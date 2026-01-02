@@ -10,6 +10,15 @@ export interface ProductReview {
   date: string;
 }
 
+export interface CreatorVideo {
+  id: string;
+  videoUrl: string;
+  thumbnailUrl?: string;
+  creatorName: string;
+  creatorInitials: string;
+  title?: string;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -30,6 +39,8 @@ export interface Product {
   colors?: string[];
   description?: string;
   reviews?: ProductReview[];
+  creatorVideos?: CreatorVideo[];
+  url?: string; // URL para tráfego pago
 }
 
 export interface CartItem extends Product {

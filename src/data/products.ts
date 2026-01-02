@@ -27,7 +27,17 @@ import escovaDentes from '@/assets/products/Escova de Dentes Elétrica Sônica.j
 import parafusadeira48V from '@/assets/products/ParafusadeiraFuradeira 48V Bateria.jpg';
 import product25 from '@/assets/products/product-25.jpg';
 import product26 from '@/assets/products/product-26.jpg';
-import { Product, Category, ProductReview } from '@/types/product';
+import parafusadeiraDomestica from '@/assets/products/Kit Parafusadeira Doméstica com maleta Leve Portátil USB Recarregável lemon tree.jpg';
+import videoParafusadeira1 from '@/assets/video-product/Kit Parafusadeira Doméstica com maleta Leve Portátil USB Recarregável 1.mp4';
+import videoParafusadeira2 from '@/assets/video-product/Kit Parafusadeira Doméstica com maleta Leve Portátil USB Recarregável 2.mp4';
+import kitBarbeadorAparador from '@/assets/products/Kit Barbeador e Aparador de Pelos Cuidados Masculinos.jpg';
+import videoBarbeador1 from '@/assets/video-product/Kit Barbeador e Aparador de Pelos Cuidados Masculinos.mp4';
+import videoBarbeador2 from '@/assets/video-product/Kit Barbeador e Aparador de Pelos Cuidados Masculinos 2.mp4';
+import videoBarbeador3 from '@/assets/video-product/Kit Barbeador e Aparador de Pelos Cuidados Masculinos 3.mp4';
+import videoBarbeador4 from '@/assets/video-product/Kit Barbeador e Aparador de Pelos Cuidados Masculinos 4.mp4';
+import videoBarbeador5 from '@/assets/video-product/Kit Barbeador e Aparador de Pelos Cuidados Masculinos 5.mp4';
+import videoBarbeador6 from '@/assets/video-product/Kit Barbeador e Aparador de Pelos Cuidados Masculinos 6.mp4';
+import { Product, Category, ProductReview, CreatorVideo } from '@/types/product';
 
 export const categories: Category[] = [
   { id: '1', name: 'Moda', icon: '👗' },
@@ -403,7 +413,7 @@ Branco - Elegante e sofisticado`,
     category: 'Moda',
     brand: 'SportMax',
     sizes: ['36', '37', '38', '39', '40', '41', '42', '43'],
-    colors: ['Preto', 'Branco', 'Cinza'],
+    colors: ['Branco'],
     description: `Tênis Masculino e Feminino Esportivo com tecnologia de amortecimento. Ideal para caminhada, corrida e academia.
 
 **Características Técnicas:**
@@ -426,7 +436,7 @@ Tabela de medidas disponível no produto`,
         userName: 'João Santos',
         userInitials: 'JS',
         rating: 5,
-        itemVariant: 'Preto 42',
+        itemVariant: 'Branco 42',
         text: 'Tênis muito confortável! Uso para caminhada e academia, qualidade excelente pelo preço.',
         date: '2024-01-28',
       },
@@ -444,7 +454,7 @@ Tabela de medidas disponível no produto`,
         userName: 'Thiago Lima',
         userInitials: 'TL',
         rating: 4,
-        itemVariant: 'Cinza 41',
+        itemVariant: 'Branco 41',
         text: 'Bom tênis, confortável e resistente. Só achei que o solado poderia ser mais aderente.',
         date: '2024-01-23',
       },
@@ -523,7 +533,7 @@ GG (Peito: 124cm | Comprimento: 76cm)`,
     category: 'Moda',
     brand: 'UrbanStep',
     sizes: ['39', '40', '41', '42', '43', '44'],
-    colors: ['Preto', 'Marrom', 'Azul'],
+    colors: ['Branco'],
     description: `Tênis Masculino Básico Casual com design clássico e confortável. Perfeito para o dia a dia.
 
 **Características Técnicas:**
@@ -544,7 +554,7 @@ GG (Peito: 124cm | Comprimento: 76cm)`,
         userName: 'Bruno Carvalho',
         userInitials: 'BC',
         rating: 4,
-        itemVariant: 'Preto 42',
+        itemVariant: 'Branco 42',
         text: 'Tênis básico e confortável, perfeito para o dia a dia. Preço justo.',
         date: '2024-01-30',
       },
@@ -553,7 +563,7 @@ GG (Peito: 124cm | Comprimento: 76cm)`,
         userName: 'Daniel Pereira',
         userInitials: 'DP',
         rating: 5,
-        itemVariant: 'Marrom 43',
+        itemVariant: 'Branco 43',
         text: 'Excelente tênis! Confortável, durável e com bom acabamento. Recomendo!',
         date: '2024-01-27',
       },
@@ -1192,5 +1202,204 @@ Eletrônicos, relógios, brinquedos, aparelhos pequenos`,
 
 **Cores Disponíveis:**
 Preto, Transparente, Rosa, Azul, Verde`,
+  },
+  {
+    id: '27',
+    name: 'Kit Parafusadeira Doméstica com maleta Leve Portátil USB Recarregável—Presentes de Natal',
+    price: 49.90,
+    originalPrice: 99.90,
+    image: parafusadeiraDomestica,
+    rating: 4.5,
+    soldCount: 10700,
+    viewCount: 56700,
+    likesCount: 3450,
+    isHotDeal: true,
+    freeShipping: true,
+    category: 'Ferramentas',
+    brand: 'HomeTool',
+    description: `Kit Parafusadeira Doméstica com maleta Leve Portátil USB Recarregável. Ideal para trabalhos domésticos e manutenções simples.
+
+**Características Técnicas:**
+• Voltagem: USB recarregável (5V)
+• Bateria: Li-ion integrada
+• Autonomia: Até 2 horas de uso contínuo
+• Torque: Ajustável
+• Velocidade: Variável
+• Chuck: 6.35mm
+• Peso: 0.8kg
+• Tipo: Portátil e leve
+• Inclui: Maleta organizadora, bits variados, cabo USB
+
+**Conteúdo do Kit:**
+1 Parafusadeira portátil
+1 Maleta organizadora
+20 bits variados (phillips, fenda, torx, hexagonal)
+1 Cabo USB para recarga
+1 Manual de instruções
+
+**Aplicações:**
+Montagem de móveis, reparos domésticos, trabalhos em madeira, instalações simples
+
+**Garantia:**
+1 ano`,
+    creatorVideos: [
+      {
+        id: 'cv1',
+        videoUrl: videoParafusadeira1,
+        creatorName: 'Família Liu',
+        creatorInitials: 'FL',
+        title: 'vai ser rápido...',
+      },
+      {
+        id: 'cv2',
+        videoUrl: videoParafusadeira2,
+        creatorName: 'E-commerce BR',
+        creatorInitials: 'EB',
+        title: 'Kit parafusadeira com maleta!',
+      },
+    ] as CreatorVideo[],
+    reviews: [
+      {
+        id: 'r33',
+        userName: 'Paulo Henrique',
+        userInitials: 'PH',
+        rating: 5,
+        text: 'Excelente parafusadeira! Leve, potente e muito prática. A maleta organizadora é um diferencial. Recomendo muito!',
+        date: '2024-02-10',
+      },
+      {
+        id: 'r34',
+        userName: 'Roberto Alves',
+        userInitials: 'RA',
+        rating: 4,
+        text: 'Muito boa para trabalhos domésticos. Bateria dura bastante e os bits são de qualidade. Vale a pena!',
+        date: '2024-02-08',
+      },
+    ] as ProductReview[],
+  },
+  {
+    id: '28',
+    name: 'Kit Barbeador e Aparador de Pelos Cuidados Masculinos',
+    price: 9.97,
+    originalPrice: 29.99,
+    image: kitBarbeadorAparador,
+    rating: 4.8,
+    soldCount: 8750,
+    viewCount: 125000,
+    likesCount: 12450,
+    isHotDeal: true,
+    freeShipping: true,
+    category: 'Saúde',
+    brand: 'GroomPro',
+    description: `Kit completo de cuidados masculinos com barbeador elétrico e aparador de pelos. Tudo que você precisa para manter a barba e pelos sempre impecáveis.
+
+**Características Técnicas:**
+• Barbeador elétrico recarregável
+• Aparador de pelos com regulador de altura (0.5mm a 10mm)
+• Lâminas de aço inoxidável de alta qualidade
+• Sistema de corte à prova d'água (IPX7)
+• Bateria de lítio com autonomia de 90 minutos
+• Carregamento rápido via USB-C (2 horas)
+• Design ergonômico e antiderrapante
+• Indicador de bateria LED
+• Função de bloqueio de segurança
+• Limpeza fácil e rápida
+
+**Conteúdo do Kit:**
+1 Barbeador elétrico recarregável
+1 Aparador de pelos com regulador
+3 Pentes de ajuste (3mm, 6mm, 9mm)
+1 Escova de limpeza
+1 Cabo USB-C para recarga
+1 Manual de instruções
+1 Estojo protetor
+
+**Aplicações:**
+Barba, bigode, pelos corporais, cabelo, pelos nasais
+
+**Garantia:**
+2 anos de garantia do fabricante`,
+    creatorVideos: [
+      {
+        id: 'cv3',
+        videoUrl: videoBarbeador1,
+        creatorName: 'Estilo Masculino',
+        creatorInitials: 'EM',
+        title: 'Kit completo de cuidados!',
+      },
+      {
+        id: 'cv4',
+        videoUrl: videoBarbeador2,
+        creatorName: 'Beauty Reviews',
+        creatorInitials: 'BR',
+        title: 'Testando o barbeador elétrico',
+      },
+      {
+        id: 'cv5',
+        videoUrl: videoBarbeador3,
+        creatorName: 'Tech Lifestyle',
+        creatorInitials: 'TL',
+        title: 'Unboxing do kit barbeador',
+      },
+      {
+        id: 'cv6',
+        videoUrl: videoBarbeador4,
+        creatorName: 'Grooming Pro',
+        creatorInitials: 'GP',
+        title: 'Como usar o aparador',
+      },
+      {
+        id: 'cv7',
+        videoUrl: videoBarbeador5,
+        creatorName: 'Homem Moderno',
+        creatorInitials: 'HM',
+        title: 'Review completo do kit',
+      },
+      {
+        id: 'cv8',
+        videoUrl: videoBarbeador6,
+        creatorName: 'Dicas Masculinas',
+        creatorInitials: 'DM',
+        title: 'Melhor custo-benefício!',
+      },
+    ] as CreatorVideo[],
+    reviews: [
+      {
+        id: 'r35',
+        userName: 'Carlos Eduardo',
+        userInitials: 'CE',
+        rating: 5,
+        itemVariant: 'Kit Completo',
+        text: 'Excelente kit! O barbeador é muito potente e o aparador funciona perfeitamente. A bateria dura bastante e a qualidade das lâminas é superior. Recomendo muito!',
+        date: '2024-02-15',
+      },
+      {
+        id: 'r36',
+        userName: 'Felipe Santos',
+        userInitials: 'FS',
+        rating: 5,
+        itemVariant: 'Kit Completo',
+        text: 'Top demais! Pelo preço que paguei, não esperava essa qualidade. O barbeador corta bem rente, o aparador tem vários ajustes e a bateria dura bastante. Vale muito a pena! Comprei pra testar e acabei comprando mais um pra dar de presente pro meu pai. Ele também curtiu muito. A entrega foi rápida e o produto chegou bem embalado. Recomendo!',
+        date: '2024-02-12',
+      },
+      {
+        id: 'r37',
+        userName: 'Rafael Oliveira',
+        userInitials: 'RO',
+        rating: 4,
+        itemVariant: 'Kit Completo',
+        text: 'Bom produto. Funciona bem, só achei que poderia ser mais silencioso.',
+        date: '2024-02-10',
+      },
+      {
+        id: 'r38',
+        userName: 'Lucas Martins',
+        userInitials: 'LM',
+        rating: 5,
+        itemVariant: 'Kit Completo',
+        text: 'Kit perfeito! Uso todo dia e tô muito satisfeito. As lâminas são boas, bateria dura bastante e o design é legal. Super recomendo! Melhor custo-benefício que já vi. Já mostrei pros meus amigos e vários já compraram também. A qualidade é muito boa pelo preço. Vale cada centavo!',
+        date: '2024-02-08',
+      },
+    ] as ProductReview[],
   },
 ];

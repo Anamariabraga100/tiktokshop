@@ -19,7 +19,7 @@ export const CouponsDrawer = ({ isOpen, onClose }: CouponsDrawerProps) => {
 
   const handleActivate = (couponId: string) => {
     activateCoupon(couponId);
-    toast.success('Cupom ativado! Você tem 15 minutos para usar.');
+    toast.success('Cupom ativado! Você tem 15 minutos para usar.', { id: 'coupon-activated' });
     onClose();
   };
 
@@ -80,7 +80,7 @@ export const CouponsDrawer = ({ isOpen, onClose }: CouponsDrawerProps) => {
 
             {/* Coupons List */}
             <div className="p-4 space-y-3">
-              {coupons.map((coupon) => (
+              {coupons.filter((coupon) => coupon.id !== '4').map((coupon) => (
                 <motion.div
                   key={coupon.id}
                   initial={{ opacity: 0, y: 10 }}

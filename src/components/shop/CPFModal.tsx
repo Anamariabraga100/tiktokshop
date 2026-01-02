@@ -39,7 +39,7 @@ export const CPFModal = ({ isOpen, onClose, onAddCPF }: CPFModalProps) => {
     updateCPF(cpf);
     
     onAddCPF(cpf);
-    toast.success('CPF adicionado com sucesso!');
+    toast.success('CPF adicionado com sucesso!', { id: 'cpf-saved' });
   };
 
   // Carregar CPF do contexto quando modal abrir

@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Minus, Plus, Trash2, ArrowLeft, Truck, Clock, Ticket, Star, CheckCircle2, FileText, Gift, QrCode, CreditCard } from 'lucide-react';
+import { X, Minus, Plus, Trash2, ArrowLeft, Truck, Clock, Ticket, Star, CheckCircle2, FileText, Gift, QrCode, CreditCard, DollarSign } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import { useCoupons } from '@/context/CouponContext';
 import { useCustomer } from '@/context/CustomerContext';
@@ -35,6 +35,7 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
   const [showExitModal, setShowExitModal] = useState(false);
   const [pendingClose, setPendingClose] = useState(false);
   const [showAddressAlert, setShowAddressAlert] = useState(false);
+  const [showCPFAlert, setShowCPFAlert] = useState(false);
   const [showPixModal, setShowPixModal] = useState(false);
   const [showCardModal, setShowCardModal] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'pix' | 'card'>('pix');
@@ -42,11 +43,13 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
   const freeShippingThreshold = 99;
   const missingForFreeShipping = Math.max(0, freeShippingThreshold - totalPrice);
   const freeShippingProgress = Math.min(100, (totalPrice / freeShippingThreshold) * 100);
-  const hasFreeShipping = totalPrice >= freeShippingThreshold;
+  // Verificar se tem frete grátis da página de agradecimento
+  const freeShippingFromThankYou = localStorage.getItem('freeShippingFromThankYou') === 'true';
+  const hasFreeShipping = totalPrice >= freeShippingThreshold || freeShippingFromThankYou;
 
-  // Sempre aplicar cupom de R$5 quando houver itens, independente de outros cupons
-  // Não depende do sistema de cupons ativos - aplica diretamente
-  const firstPurchaseDiscount = items.length > 0 ? 5 : 0;
+  // Aplicar cupom de R$5 apenas na primeira compra
+  // Verificar se é primeira compra antes de aplicar
+  const firstPurchaseDiscount = items.length > 0 && isFirstPurchase() ? 5 : 0;
   
   // Outros cupons percentuais são aplicados se ativos
   const applicableCoupon = getApplicableCoupon(totalPrice);
@@ -60,7 +63,7 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
   
   // PIX tem 10% de desconto adicional
   const pixDiscount = selectedPaymentMethod === 'pix' ? priceAfterCoupon * 0.1 : 0;
-  const finalPrice = priceAfterCoupon - pixDiscount;
+  const priceAfterPix = priceAfterCoupon - pixDiscount;
 
   // Calculate original total and savings
   const originalTotal = items.reduce((sum, item) => sum + (item.originalPrice || item.price) * item.quantity, 0);
@@ -132,14 +135,23 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
     };
   }, [hasAddress, hasFreeShipping]);
 
+  // Calcular preço final incluindo frete
+  const finalPrice = priceAfterPix + shippingPrice;
+
   const handleCheckout = () => {
     if (!hasAddress) {
       setShowAddressAlert(true);
       return;
     }
     
+    if (!hasCPF) {
+      setShowCPFAlert(true);
+      return;
+    }
+    
     // Abrir modal baseado no método selecionado
     if (selectedPaymentMethod === 'pix') {
+      console.log('Abrindo modal PIX');
       setShowPixModal(true);
     } else {
       setShowCardModal(true);
@@ -151,7 +163,7 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
     if (isFirstPurchase()) {
       markPurchaseCompleted();
     }
-    toast.success('Pedido realizado com sucesso!');
+    // Toast será mostrado pelo modal de pagamento
     clearCart();
     onClose();
   };
@@ -167,10 +179,18 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
     setShowAddressModal(true);
   };
 
+  const handleAddCPFFromAlert = () => {
+    setShowCPFAlert(false);
+    setShowCPFModal(true);
+  };
+
   const handleAddAddress = () => {
     setShowAddressModal(false);
     // O endereço já foi salvo pelo contexto no AddressModal
-    toast.success('Endereço adicionado com sucesso!');
+    // Adicionar pequeno delay para evitar sobreposição com outras notificações
+    setTimeout(() => {
+      toast.success('Endereço adicionado com sucesso!', { id: 'address-added' });
+    }, 100);
   };
 
   const handleCloseAttempt = () => {
@@ -398,6 +418,22 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                               <div className="flex-1 min-w-0">
                                 <h4 className="text-sm font-medium mb-2 line-clamp-2">{item.name}</h4>
                                 
+                                {/* Variantes selecionadas - discreto */}
+                                {(item.selectedColor || item.selectedSize) && (
+                                  <div className="flex flex-wrap gap-1.5 mb-2">
+                                    {item.selectedColor && (
+                                      <span className="text-xs text-muted-foreground">
+                                        Cor: <span className="font-medium text-foreground">{item.selectedColor}</span>
+                                      </span>
+                                    )}
+                                    {item.selectedSize && (
+                                      <span className="text-xs text-muted-foreground">
+                                        {item.selectedColor && ' • '}Tamanho: <span className="font-medium text-foreground">{item.selectedSize}</span>
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                                
                                 <div className="flex flex-wrap gap-1.5 mb-2">
                                   {isGift && (
                                     <span className="text-xs px-2 py-0.5 bg-success/20 text-success rounded font-semibold">
@@ -562,6 +598,20 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                             <span className="font-medium">- R$ {pixDiscount.toFixed(2).replace('.', ',')}</span>
                           </div>
                         )}
+
+                        {/* Frete */}
+                        {hasAddress && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Frete</span>
+                            <span className="font-medium">
+                              {hasFreeShipping ? (
+                                <span className="text-success">Grátis</span>
+                              ) : (
+                                <>R$ {formattedShippingPrice}</>
+                              )}
+                            </span>
+                          </div>
+                        )}
                       </div>
 
                       <div className="mt-4 pt-4 border-t border-border">
@@ -666,7 +716,7 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
 
               {/* Footer Button */}
               {items.length > 0 && (
-                <div className="border-t border-border bg-card p-4 safe-bottom">
+                <div className="border-t border-border bg-card px-4" style={{ paddingTop: '1rem', paddingBottom: 'max(1rem, env(safe-area-inset-bottom, 1rem))' }}>
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
@@ -702,67 +752,122 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
         onAddCPF={() => {
           // O CPF já foi salvo pelo contexto no CPFModal
           setShowCPFModal(false);
+          toast.success('CPF adicionado com sucesso!', { id: 'cpf-added-cart' });
         }}
       />
 
-      {/* Exit Confirmation Modal */}
+      {/* Exit Confirmation Modal - Versão Simplificada */}
       <AlertDialog 
         open={showExitModal} 
         onOpenChange={(open) => {
           if (!open) {
-            // Se fechar sem escolher, cancela o fechamento do carrinho
             setShowExitModal(false);
             setPendingClose(false);
           }
         }}
       >
-        <AlertDialogContent className="rounded-3xl p-8 max-w-sm">
-          <AlertDialogHeader className="text-center space-y-4">
-            <div className="w-20 h-20 bg-gradient-to-br from-success/20 to-success/10 rounded-full flex items-center justify-center mx-auto">
-              <span className="text-3xl">💰</span>
+        <AlertDialogContent className="rounded-2xl p-6 max-w-sm">
+          {/* Botão X no canto superior direito */}
+          <button
+            onClick={handleExitConfirm}
+            className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full hover:bg-muted transition-colors z-10"
+          >
+            <X className="w-5 h-5 text-foreground" />
+          </button>
+
+          <AlertDialogHeader className="text-center space-y-6 pt-2">
+            {/* Ícone simples */}
+            <div className="flex justify-center items-center my-4">
+              <div className="relative">
+                <div className="w-20 h-20 bg-gradient-to-br from-primary/20 to-tiktok-pink/20 rounded-full flex items-center justify-center">
+                  <DollarSign className="w-10 h-10 text-primary" />
+                </div>
+              </div>
             </div>
-            <AlertDialogTitle className="text-xl font-bold">
-              Não perca a chance de economizar!
-            </AlertDialogTitle>
-            <div className="space-y-3">
+
+            {/* Texto principal */}
+            <div className="space-y-4">
+              <AlertDialogTitle className="text-base font-normal text-foreground leading-tight">
+                Você está economizando R$
+              </AlertDialogTitle>
+              
+              {/* Valor do desconto total em destaque */}
               {totalSavings > 0 ? (
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">Você está economizando</p>
-                  <p className="text-4xl font-bold text-success">
-                    R$ {totalSavings.toFixed(2).replace('.', ',')}
+                <div className="space-y-2">
+                  <p className="text-5xl md:text-6xl font-bold text-destructive leading-none">
+                    {totalSavings.toFixed(2).replace('.', ',')}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {productDiscount > 0 && `R$ ${productDiscount.toFixed(2).replace('.', ',')} em produtos`}
+                    {productDiscount > 0 && couponDiscount > 0 && ' • '}
+                    {couponDiscount > 0 && `R$ ${couponDiscount.toFixed(2).replace('.', ',')} em cupons`}
+                    {pixDiscount > 0 && (productDiscount > 0 || couponDiscount > 0) && ' • '}
+                    {pixDiscount > 0 && `R$ ${pixDiscount.toFixed(2).replace('.', ',')} no PIX`}
+                  </p>
+                </div>
+              ) : couponDiscount > 0 ? (
+                <div className="space-y-2">
+                  <p className="text-5xl md:text-6xl font-bold text-destructive leading-none">
+                    {couponDiscount.toFixed(2).replace('.', ',')}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Com cupons disponíveis
                   </p>
                 </div>
               ) : productDiscount > 0 ? (
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">Você está economizando</p>
-                  <p className="text-4xl font-bold text-success">
-                    R$ {productDiscount.toFixed(2).replace('.', ',')}
+                <div className="space-y-2">
+                  <p className="text-5xl md:text-6xl font-bold text-destructive leading-none">
+                    {productDiscount.toFixed(2).replace('.', ',')}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Em descontos de produtos
                   </p>
                 </div>
               ) : (
                 <div>
-                  <p className="text-sm text-muted-foreground mb-1">Valor do pedido</p>
-                  <p className="text-4xl font-bold text-primary">
-                    R$ {totalPrice.toFixed(2).replace('.', ',')}
+                  <p className="text-5xl md:text-6xl font-bold text-primary leading-none">
+                    {totalPrice.toFixed(2).replace('.', ',')}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Finalize sua compra agora
+                  </p>
+                </div>
+              )}
+              
+              {/* Mensagem persuasiva adicional */}
+              {totalSavings > 0 && (
+                <div className="pt-2">
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    Não perca essa oportunidade! Finalize agora e aproveite todos esses descontos.
                   </p>
                 </div>
               )}
             </div>
           </AlertDialogHeader>
-          <AlertDialogFooter className="flex-col gap-3 pt-6">
-            <AlertDialogAction 
-              onClick={handleFinalizePurchase} 
-              className="w-full rounded-full bg-gradient-to-r from-tiktok-pink to-primary py-6 text-base font-semibold"
+
+          {/* Botões */}
+          <div className="flex flex-col gap-3 pt-6 pb-2">
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={handleFinalizePurchase}
+              className="w-full rounded-full bg-gradient-to-r from-destructive to-destructive/90 hover:from-destructive/90 hover:to-destructive text-white py-5 text-base font-bold shadow-lg transition-all relative overflow-hidden"
             >
-              Finalizar Compra
-            </AlertDialogAction>
-            <AlertDialogCancel 
-              onClick={handleExitConfirm} 
-              className="w-full rounded-full border-2 py-6 text-base font-medium"
+              <span className="relative z-10">Finalizar compra e economizar R$ {totalSavings > 0 ? totalSavings.toFixed(2).replace('.', ',') : 'agora'}</span>
+              <motion.div
+                className="absolute inset-0 bg-white/20"
+                initial={{ x: '-100%' }}
+                animate={{ x: '100%' }}
+                transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+              />
+            </motion.button>
+            <button
+              onClick={handleExitConfirm}
+              className="w-full py-3 text-sm text-muted-foreground hover:text-foreground transition-colors font-medium"
             >
               Não, obrigado
-            </AlertDialogCancel>
-          </AlertDialogFooter>
+            </button>
+          </div>
         </AlertDialogContent>
       </AlertDialog>
 
@@ -792,6 +897,37 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
               className="w-full rounded-full border-2 py-3 text-base font-medium"
             >
               Mais tarde
+            </AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* CPF Alert Dialog */}
+      <AlertDialog 
+        open={showCPFAlert} 
+        onOpenChange={setShowCPFAlert}
+      >
+        <AlertDialogContent className="rounded-3xl p-6 max-w-sm">
+          <AlertDialogHeader className="text-center space-y-3">
+            <AlertDialogTitle className="text-lg font-semibold">
+              Adicionar CPF
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-muted-foreground">
+              É necessário informar o CPF para prosseguir com a finalização da compra.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col gap-3 pt-4">
+            <AlertDialogAction 
+              onClick={handleAddCPFFromAlert} 
+              className="w-full rounded-full bg-gradient-to-r from-tiktok-pink to-primary py-3 text-base font-semibold"
+            >
+              Adicionar CPF
+            </AlertDialogAction>
+            <AlertDialogCancel 
+              onClick={() => setShowCPFAlert(false)} 
+              className="w-full rounded-full border-2 py-3 text-base font-medium"
+            >
+              Cancelar
             </AlertDialogCancel>
           </AlertDialogFooter>
         </AlertDialogContent>

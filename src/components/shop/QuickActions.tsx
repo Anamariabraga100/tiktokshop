@@ -36,7 +36,7 @@ export const QuickActions = ({ onCouponsClick, onOffersClick, onAddressClick }: 
   ];
 
   return (
-    <div className="overflow-x-auto scrollbar-hide -mx-4 px-4 mb-6 md:mx-0 md:px-0 md:overflow-visible">
+    <div className="overflow-x-auto scrollbar-hide -mx-4 px-4 mb-6 md:mx-0 md:px-0 md:overflow-visible" style={{ paddingTop: '8px', marginTop: '-8px' }}>
       <div className="flex gap-2 md:gap-3 md:flex-wrap md:justify-center">
         {actions.map((action, index) => (
           <motion.button
@@ -51,7 +51,7 @@ export const QuickActions = ({ onCouponsClick, onOffersClick, onAddressClick }: 
             <action.icon className="w-4 h-4 md:w-5 md:h-5" />
             {action.label}
             {action.badge && (
-              <span className="absolute -top-1 -right-1 w-5 h-5 bg-primary text-primary-foreground text-[10px] font-bold rounded-full flex items-center justify-center">
+              <span className="absolute -top-1 -right-1 w-5 h-5 bg-primary text-primary-foreground text-[10px] font-bold rounded-full flex items-center justify-center shadow-sm z-10 border-2 border-card">
                 {action.badge}
               </span>
             )}

@@ -56,3 +56,6 @@ export const validatePixData = (customerData: CustomerData | null): boolean => {
 };
 
 
+
+
+

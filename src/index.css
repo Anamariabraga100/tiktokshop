@@ -124,6 +124,14 @@
   body {
     @apply bg-background text-foreground antialiased;
   }
+
+  /* Melhorar responsividade de touch no mobile */
+  button,
+  [role="button"],
+  .cursor-pointer {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
 }
 
 @layer utilities {
@@ -137,6 +145,22 @@
 
   .safe-bottom {
     padding-bottom: env(safe-area-inset-bottom, 20px);
+  }
+
+  .safe-area-inset-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  .safe-area-inset-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .safe-area-inset-left {
+    padding-left: env(safe-area-inset-left, 0px);
+  }
+
+  .safe-area-inset-right {
+    padding-right: env(safe-area-inset-right, 0px);
   }
 }
 
@@ -164,5 +188,15 @@
 
   .bottom-nav-item.active {
     @apply text-primary;
+  }
+
+  /* Ajuste para notificações não cobrirem o header */
+  [data-sonner-toaster] {
+    top: 70px !important;
+  }
+  
+  /* Garantir que os toasts sejam removidos após 2 segundos */
+  [data-sonner-toast] {
+    --duration: 2000ms;
   }
 }

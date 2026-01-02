@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, HelpCircle, Package, ChevronDown, ChevronUp, Search } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useCustomer } from '@/context/CustomerContext';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
@@ -54,18 +54,92 @@ export const HelpDrawer = ({ isOpen, onClose }: HelpDrawerProps) => {
   const [activeFAQ, setActiveFAQ] = useState<number | null>(null);
   const [trackingCPF, setTrackingCPF] = useState('');
   const [showTracking, setShowTracking] = useState(false);
+  const [trackingResult, setTrackingResult] = useState<{ orderNumber: string; status: string; date: string } | null>(null);
   const { customerData } = useCustomer();
 
+  // Preencher CPF automaticamente se estiver disponível e resetar resultado ao abrir
+  useEffect(() => {
+    if (isOpen) {
+      setTrackingResult(null);
+      if (customerData?.cpf && !trackingCPF) {
+        setTrackingCPF(customerData.cpf);
+      }
+    }
+  }, [isOpen, customerData?.cpf]);
+
   const handleTrackOrder = () => {
-    const cpf = trackingCPF.replace(/\D/g, '');
+    // Usar CPF do input ou do customerData
+    const cpfToUse = trackingCPF || customerData?.cpf || '';
+    const cpf = cpfToUse.replace(/\D/g, ''); // Normalizar CPF (apenas números)
+    
     if (cpf.length !== 11) {
       toast.error('CPF inválido. Digite um CPF válido com 11 dígitos.');
       return;
     }
 
-    // Simular busca de pedido
-    toast.success('Pedido encontrado! Status: Em trânsito');
-    // Aqui você integraria com a API de rastreamento real
+    // Buscar pedidos salvos no localStorage (usando CPF normalizado)
+    const ordersKey = `orders_${cpf}`;
+    const savedOrders = JSON.parse(localStorage.getItem(ordersKey) || '[]');
+    
+    // Também verificar lastOrder se o CPF corresponder
+    const lastOrder = localStorage.getItem('lastOrder');
+    let allOrders = [...savedOrders];
+    
+    if (lastOrder) {
+      try {
+        const lastOrderData = JSON.parse(lastOrder);
+        // Normalizar CPF do lastOrder para comparação
+        const lastOrderCPF = lastOrderData.cpf ? lastOrderData.cpf.replace(/\D/g, '') : null;
+        const customerCPF = customerData?.cpf ? customerData.cpf.replace(/\D/g, '') : null;
+        
+        // Verificar se o CPF corresponde (normalizado)
+        if (lastOrderCPF === cpf || (!lastOrderCPF && customerCPF === cpf)) {
+          // Adicionar lastOrder se não estiver já na lista
+          const exists = allOrders.some((o: any) => o.orderNumber === lastOrderData.orderNumber);
+          if (!exists) {
+            allOrders.push(lastOrderData);
+          }
+        }
+      } catch (e) {
+        console.error('Erro ao ler lastOrder:', e);
+      }
+    }
+
+    // Também buscar por todas as chaves de pedidos para garantir que não perdemos nenhum
+    // (caso tenha sido salvo com formatação diferente)
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('orders_')) {
+          const keyCPF = key.replace('orders_', '').replace(/\D/g, '');
+          if (keyCPF === cpf && key !== ordersKey) {
+            // Encontrou uma chave com CPF correspondente mas formato diferente
+            const additionalOrders = JSON.parse(localStorage.getItem(key) || '[]');
+            allOrders = [...allOrders, ...additionalOrders];
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Erro ao buscar pedidos adicionais:', e);
+    }
+
+    if (allOrders.length > 0) {
+      // Pegar o pedido mais recente
+      const latestOrder = allOrders.sort((a: any, b: any) => 
+        new Date(b.date).getTime() - new Date(a.date).getTime()
+      )[0];
+      
+      setTrackingResult({
+        orderNumber: latestOrder.orderNumber || 'N/A',
+        status: latestOrder.status || 'em_preparacao',
+        date: latestOrder.date || new Date().toISOString()
+      });
+      
+      toast.success('Pedido encontrado! Status: Em preparação');
+    } else {
+      setTrackingResult(null);
+      toast.info('Nenhum pedido encontrado para este CPF.');
+    }
   };
 
   const formatCPF = (value: string) => {
@@ -151,6 +225,30 @@ export const HelpDrawer = ({ isOpen, onClose }: HelpDrawerProps) => {
                     Usando CPF cadastrado: {customerData.cpf}
                   </p>
                 )}
+                {trackingResult && (
+                  <div className="mt-4 p-3 bg-card rounded-lg border border-border">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Package className="w-4 h-4 text-primary" />
+                      <span className="font-semibold text-sm">Pedido #{trackingResult.orderNumber}</span>
+                    </div>
+                    <div className="space-y-1 text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="text-muted-foreground">Status:</span>
+                        <span className="font-medium text-primary">Em preparação</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-muted-foreground">Data:</span>
+                        <span className="font-medium">
+                          {new Date(trackingResult.date).toLocaleDateString('pt-BR', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric'
+                          })}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* FAQ Section */}
@@ -229,5 +327,7 @@ export const HelpDrawer = ({ isOpen, onClose }: HelpDrawerProps) => {
     </AnimatePresence>
   );
 };
+
+
 
 

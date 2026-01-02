@@ -5,8 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { useCustomer } from '@/context/CustomerContext';
-import { Address } from '@/context/CustomerContext';
+import { useCustomer, Address, CustomerData } from '@/context/CustomerContext';
 
 interface AddressModalProps {
   isOpen: boolean;
@@ -25,8 +24,9 @@ interface ViaCEPResponse {
 }
 
 export const AddressModal = ({ isOpen, onClose, onAddAddress }: AddressModalProps) => {
-  const { customerData, updateAddress } = useCustomer();
+  const { customerData, updateAddress, saveCustomerData } = useCustomer();
   const [formData, setFormData] = useState({
+    email: customerData?.email || '',
     cep: customerData?.address?.cep || '',
     rua: customerData?.address?.rua || '',
     numero: customerData?.address?.numero || '',
@@ -94,23 +94,52 @@ export const AddressModal = ({ isOpen, onClose, onAddAddress }: AddressModalProp
 
   // Carregar dados do contexto quando modal abrir
   useEffect(() => {
-    if (isOpen && customerData?.address) {
+    if (isOpen) {
       setFormData({
-        cep: customerData.address.cep || '',
-        rua: customerData.address.rua || '',
-        numero: customerData.address.numero || '',
-        complemento: customerData.address.complemento || '',
-        bairro: customerData.address.bairro || '',
-        cidade: customerData.address.cidade || '',
-        estado: customerData.address.estado || '',
+        email: customerData?.email || '',
+        cep: customerData?.address?.cep || '',
+        rua: customerData?.address?.rua || '',
+        numero: customerData?.address?.numero || '',
+        complemento: customerData?.address?.complemento || '',
+        bairro: customerData?.address?.bairro || '',
+        cidade: customerData?.address?.cidade || '',
+        estado: customerData?.address?.estado || '',
       });
     }
   }, [isOpen, customerData]);
+
+  // Bloquear scroll do body quando o modal estiver aberto
+  useEffect(() => {
+    if (isOpen) {
+      // Salvar a posição atual do scroll
+      const scrollY = window.scrollY;
+      // Bloquear o scroll
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.width = '100%';
+      document.body.style.overflow = 'hidden';
+      
+      return () => {
+        // Restaurar o scroll quando fechar
+        document.body.style.position = '';
+        document.body.style.top = '';
+        document.body.style.width = '';
+        document.body.style.overflow = '';
+        window.scrollTo(0, scrollY);
+      };
+    }
+  }, [isOpen]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.cep || !formData.rua || !formData.numero || !formData.bairro || !formData.cidade || !formData.estado) {
       toast.error('Por favor, preencha todos os campos obrigatórios');
+      return;
+    }
+
+    // Validar e-mail se preenchido
+    if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      toast.error('Por favor, insira um e-mail válido');
       return;
     }
     
@@ -125,10 +154,15 @@ export const AddressModal = ({ isOpen, onClose, onAddAddress }: AddressModalProp
       estado: formData.estado,
     };
     
-    updateAddress(address);
+    // Salvar endereço e e-mail juntos usando saveCustomerData para garantir sincronização
+    const dataToSave: Partial<CustomerData> = { address };
+    if (formData.email) {
+      dataToSave.email = formData.email;
+    }
+    saveCustomerData(dataToSave as CustomerData);
     
     onAddAddress();
-    toast.success('Endereço cadastrado com sucesso!');
+    // Notificação será exibida pelo CartDrawer através de handleAddAddress
   };
 
   return (
@@ -149,7 +183,7 @@ export const AddressModal = ({ isOpen, onClose, onAddAddress }: AddressModalProp
             initial={{ opacity: 0, scale: 0.9, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 20 }}
-            className="fixed inset-0 z-[60] flex items-center justify-center p-4 pointer-events-none"
+            className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-4 pointer-events-none safe-area-inset"
             onClick={(e) => {
               // Se clicar no container (fora do conteúdo), fecha
               if (e.target === e.currentTarget) {
@@ -158,14 +192,15 @@ export const AddressModal = ({ isOpen, onClose, onAddAddress }: AddressModalProp
             }}
           >
             <div 
-              className="bg-card rounded-2xl p-6 max-w-md w-full shadow-xl max-h-[90vh] overflow-y-auto pointer-events-auto"
+              className="bg-card rounded-2xl p-4 sm:p-6 md:p-8 max-w-md md:max-w-lg w-full shadow-xl max-h-[85vh] sm:max-h-[90vh] overflow-y-auto pointer-events-auto safe-area-inset"
               onClick={(e) => e.stopPropagation()}
+              style={{ maxHeight: 'calc(100vh - 2rem)' }}
             >
               {/* Header */}
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <MapPin className="w-5 h-5 text-primary" />
-                  <h3 className="text-lg font-semibold">
+              <div className="flex items-center justify-between mb-4 sm:mb-6 md:mb-8">
+                <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
+                  <MapPin className="w-5 h-5 md:w-6 md:h-6 text-primary flex-shrink-0" />
+                  <h3 className="text-base sm:text-lg md:text-xl font-semibold truncate">
                     Adicionar endereço de entrega
                   </h3>
                 </div>
@@ -174,14 +209,25 @@ export const AddressModal = ({ isOpen, onClose, onAddAddress }: AddressModalProp
                     e.stopPropagation();
                     onClose();
                   }}
-                  className="p-1 rounded-full hover:bg-muted transition-colors"
+                  className="p-1 rounded-full hover:bg-muted transition-colors flex-shrink-0 ml-2"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-4 h-4 sm:w-5 sm:h-5" />
                 </button>
               </div>
 
               {/* Form */}
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4 md:space-y-5">
+                <div className="space-y-2">
+                  <Label htmlFor="email">E-mail</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="seu@email.com"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  />
+                </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="cep">CEP *</Label>
                   <div className="relative">
@@ -255,7 +301,7 @@ export const AddressModal = ({ isOpen, onClose, onAddAddress }: AddressModalProp
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-2 sm:gap-3">
                   <div className="space-y-2">
                     <Label htmlFor="numero">Número *</Label>
                     <Input
@@ -300,20 +346,20 @@ export const AddressModal = ({ isOpen, onClose, onAddAddress }: AddressModalProp
                 </div>
 
                 {/* Buttons */}
-                <div className="flex gap-3 pt-2">
+                <div className="flex gap-2 sm:gap-3 pt-2">
                   <button
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       onClose();
                     }}
-                    className="flex-1 py-3 px-4 border border-border rounded-full font-medium text-muted-foreground hover:bg-muted transition-colors"
+                    className="flex-1 py-2.5 sm:py-3 px-3 sm:px-4 border border-border rounded-full font-medium text-sm sm:text-base text-muted-foreground hover:bg-muted transition-colors"
                   >
                     Cancelar
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 py-3 px-4 bg-gradient-to-r from-tiktok-pink to-primary text-white rounded-full font-semibold hover:opacity-90 transition-opacity"
+                    className="flex-1 py-2.5 sm:py-3 px-3 sm:px-4 bg-gradient-to-r from-tiktok-pink to-primary text-white rounded-full font-semibold text-sm sm:text-base hover:opacity-90 transition-opacity"
                   >
                     Salvar
                   </button>

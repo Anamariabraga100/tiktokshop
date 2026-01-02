@@ -8,6 +8,7 @@ import { CouponProvider } from "./context/CouponContext";
 import { CustomerProvider } from "./context/CustomerContext";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
+import ThankYou from "./pages/ThankYou";
 
 const queryClient = new QueryClient();
 
@@ -22,6 +23,8 @@ const App = () => (
             <BrowserRouter>
               <Routes>
                 <Route path="/" element={<Index />} />
+                <Route path="/produto/:id" element={<Index />} />
+                <Route path="/thank-you" element={<ThankYou />} />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<NotFound />} />
               </Routes>

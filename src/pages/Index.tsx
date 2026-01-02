@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Header } from '@/components/shop/Header';
 import { SearchBar } from '@/components/shop/SearchBar';
@@ -11,11 +12,13 @@ import { CartDrawer } from '@/components/shop/CartDrawer';
 import { CouponsDrawer } from '@/components/shop/CouponsDrawer';
 import { HelpDrawer } from '@/components/shop/HelpDrawer';
 import { ExitCouponModal } from '@/components/shop/ExitCouponModal';
+import { AddressModal } from '@/components/shop/AddressModal';
 import { BottomNav } from '@/components/shop/BottomNav';
 import { ScrollToTop } from '@/components/shop/ScrollToTop';
 import { products, categories } from '@/data/products';
 import { Product } from '@/types/product';
 import { useCart } from '@/context/CartContext';
+import { Orders } from './Orders';
 import { SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -28,6 +31,8 @@ import {
 type SortOption = 'default' | 'price-asc' | 'price-desc' | 'rating' | 'sold';
 
 const Index = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -36,10 +41,35 @@ const Index = () => {
   const [isCouponsOpen, setIsCouponsOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isExitCouponModalOpen, setIsExitCouponModalOpen] = useState(false);
+  const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('home');
   const [headerTab, setHeaderTab] = useState<string | null>(null);
   const [sortOption, setSortOption] = useState<SortOption>('default');
   const { totalItems } = useCart();
+
+  // Verificar se há ID de produto na URL e abrir automaticamente
+  useEffect(() => {
+    const pathParts = location.pathname.split('/').filter(Boolean);
+    
+    // Se a URL for /produto/:id, abrir o produto
+    if (pathParts[0] === 'produto' && pathParts[1]) {
+      const productIdFromUrl = pathParts[1];
+      const product = products.find(p => p.id === productIdFromUrl);
+      if (product && product.id !== selectedProduct?.id) {
+        setSelectedProduct(product);
+        setIsProductDrawerOpen(true);
+      } else if (!product) {
+        // Produto não encontrado, redirecionar para home
+        navigate('/', { replace: true });
+      }
+    } else if (pathParts.length === 0 || pathParts[0] === '') {
+      // Se estiver na home e houver produto aberto, fechar
+      if (selectedProduct && isProductDrawerOpen) {
+        setSelectedProduct(null);
+        setIsProductDrawerOpen(false);
+      }
+    }
+  }, [location.pathname, selectedProduct, isProductDrawerOpen, navigate]);
 
   // Handle tab changes
   useEffect(() => {
@@ -51,6 +81,15 @@ const Index = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [activeTab]);
 
+  // Verificar se deve abrir o carrinho (vindo da página de agradecimento)
+  useEffect(() => {
+    const shouldOpenCart = localStorage.getItem('openCart');
+    if (shouldOpenCart === 'true') {
+      setIsCartOpen(true);
+      localStorage.removeItem('openCart');
+    }
+  }, []);
+
   // Detectar quando o usuário tenta sair do site
   useEffect(() => {
     let hasShownModal = false;
@@ -58,7 +97,7 @@ const Index = () => {
     // Detectar quando o mouse sai da janela (tentativa de fechar)
     const handleMouseLeave = (e: MouseEvent) => {
       // Só ativa se o mouse sair pela parte superior da janela (indicando fechamento)
-      if (e.clientY <= 0 && !hasShownModal) {
+      if (e.clientY <= 0 && !hasShownModal && !isExitCouponModalOpen) {
         const hasShownToday = sessionStorage.getItem('exitCouponShown');
         if (!hasShownToday) {
           hasShownModal = true;
@@ -68,24 +107,11 @@ const Index = () => {
       }
     };
 
-    // Detectar tentativa de fechar aba/janela
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      const hasShownToday = sessionStorage.getItem('exitCouponShown');
-      if (!hasShownToday && !isExitCouponModalOpen) {
-        // Mostrar o modal antes de sair
-        setIsExitCouponModalOpen(true);
-        sessionStorage.setItem('exitCouponShown', 'true');
-        e.preventDefault();
-        e.returnValue = '';
-        return '';
-      }
-    };
-
-    // Detectar quando o usuário tenta navegar para outra página
+    // Detectar quando o usuário tenta navegar para outra página (mudança de aba)
     const handleVisibilityChange = () => {
-      if (document.hidden) {
+      if (document.hidden && !hasShownModal && !isExitCouponModalOpen) {
         const hasShownToday = sessionStorage.getItem('exitCouponShown');
-        if (!hasShownToday && !hasShownModal) {
+        if (!hasShownToday) {
           hasShownModal = true;
           setIsExitCouponModalOpen(true);
           sessionStorage.setItem('exitCouponShown', 'true');
@@ -94,12 +120,10 @@ const Index = () => {
     };
 
     document.addEventListener('mouseleave', handleMouseLeave);
-    window.addEventListener('beforeunload', handleBeforeUnload);
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       document.removeEventListener('mouseleave', handleMouseLeave);
-      window.removeEventListener('beforeunload', handleBeforeUnload);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [isExitCouponModalOpen]);
@@ -110,24 +134,30 @@ const Index = () => {
     // Filter by header tab
     if (headerTab === 'AO VIVO') {
       result = result.filter((p) => p.isLive);
-    } else if (headerTab === 'Explorar') {
-      // Produtos com desconto
+    } else if (headerTab === 'Ofertas') {
+      // Produtos com desconto (originalPrice > price)
       result = result.filter((p) => p.originalPrice && p.originalPrice > p.price);
-    } else if (headerTab === 'Para você') {
-      // Produtos recomendados: alta avaliação, mais vendidos, com desconto ou novos
-      result = result.filter((p) => 
-        p.rating >= 4.5 || 
-        p.soldCount > 2000 || 
-        (p.originalPrice && p.originalPrice > p.price) ||
-        p.isNewCustomerDeal ||
-        p.isHotDeal
-      );
-      // Ordenar por relevância: rating + vendas + desconto
+      // Ordenar por maior desconto
       result.sort((a, b) => {
-        const scoreA = (a.rating * 2) + (a.soldCount / 1000) + (a.originalPrice && a.originalPrice > a.price ? 2 : 0);
-        const scoreB = (b.rating * 2) + (b.soldCount / 1000) + (b.originalPrice && b.originalPrice > b.price ? 2 : 0);
-        return scoreB - scoreA;
+        const discountA = a.originalPrice && a.price ? (a.originalPrice - a.price) / a.originalPrice : 0;
+        const discountB = b.originalPrice && b.price ? (b.originalPrice - b.price) / b.originalPrice : 0;
+        return discountB - discountA;
       });
+    } else if (headerTab === 'Novidades') {
+      // Produtos novos: isNewCustomerDeal, isHotDeal, ou com alta avaliação recente
+      result = result.filter((p) => 
+        p.isNewCustomerDeal || 
+        p.isHotDeal ||
+        (p.rating >= 4.5 && p.soldCount < 500) // Produtos bem avaliados mas pouco vendidos (novos)
+      );
+      // Ordenar por rating e depois por soldCount (menos vendidos primeiro = mais novos)
+      result.sort((a, b) => {
+        if (a.rating !== b.rating) return b.rating - a.rating;
+        return a.soldCount - b.soldCount;
+      });
+    } else if (headerTab === 'Mais Vendidos') {
+      // Ordenar por quantidade vendida (mais vendidos primeiro)
+      result.sort((a, b) => b.soldCount - a.soldCount);
     }
 
     // Filter by tab
@@ -176,11 +206,24 @@ const Index = () => {
     return sorted;
   }, [selectedCategory, searchQuery, activeTab, sortOption, headerTab]);
 
+  // Produtos mais baratos do site (ordenados por preço)
+  const cheapestProducts = [...products]
+    .sort((a, b) => a.price - b.price)
+    .slice(0, 8);
+  
   const hotDeals = products.filter((p) => p.isHotDeal);
   const newCustomerDeals = products.filter((p) => p.isNewCustomerDeal);
   const mostSold = [...products].sort((a, b) => b.soldCount - a.soldCount).slice(0, 4);
 
   const handleProductClick = (product: Product) => {
+    // Se o produto tiver URL, abrir em nova aba para tráfego pago
+    if (product.url) {
+      window.open(product.url, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    // Atualizar URL para o produto
+    navigate(`/produto/${product.id}`, { replace: false });
+    // Abrir o drawer
     setSelectedProduct(product);
     setIsProductDrawerOpen(true);
   };
@@ -222,11 +265,8 @@ const Index = () => {
       setIsHelpOpen(true);
       return;
     }
-    if (tab === 'Loja') {
-      setHeaderTab(null);
-    } else {
-      setHeaderTab(tab);
-    }
+    // Nova lógica: todas as abas definem o headerTab, exceto se não houver seleção
+    setHeaderTab(tab);
     setSelectedCategory(null);
     setSearchQuery('');
     setActiveTab('home');
@@ -241,11 +281,11 @@ const Index = () => {
     if (headerTab === 'Ajuda') {
       return 'Ajuda';
     }
-    if (headerTab === 'Explorar') {
-      return 'Produtos em Oferta';
+    if (headerTab === 'Novidades') {
+      return '✨ Novidades';
     }
-    if (headerTab === 'Para você') {
-      return 'Recomendados para você';
+    if (headerTab === 'Mais Vendidos') {
+      return '🏆 Mais Vendidos';
     }
     if (activeTab === 'deals') {
       return 'Ofertas especiais';
@@ -266,20 +306,33 @@ const Index = () => {
         onCategorySelect={setSelectedCategory}
         onCouponsClick={() => setIsCouponsOpen(true)}
         onTabClick={handleHeaderTabClick}
-        activeHeaderTab={headerTab || 'Loja'}
+        activeHeaderTab={headerTab}
+        onAddressClick={() => setIsAddressModalOpen(true)}
       />
 
       <main className="px-4 py-4 md:px-6 md:py-6 max-w-7xl mx-auto">
-        <div className="mb-4">
-          <SearchBar value={searchQuery} onChange={setSearchQuery} placeholder="Buscar produtos, marcas..." />
-        </div>
+        {activeTab === 'orders' ? (
+          <Orders 
+            onProductClick={handleProductClick} 
+            onGoToShop={() => {
+              setActiveTab('home');
+              setTimeout(() => {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }, 100);
+            }}
+          />
+        ) : (
+          <>
+            <div className="mb-4">
+              <SearchBar value={searchQuery} onChange={setSearchQuery} placeholder="Buscar produtos, marcas..." />
+            </div>
 
-        {activeTab === 'home' && (
+            {activeTab === 'home' && (
           <>
             <QuickActions 
               onCouponsClick={() => setIsCouponsOpen(true)} 
               onOffersClick={scrollToOffers}
-              onAddressClick={() => setIsCartOpen(true)}
+              onAddressClick={() => setIsAddressModalOpen(true)}
             />
 
             <div className="mb-6 md:mb-8">
@@ -319,9 +372,9 @@ const Index = () => {
           </div>
         )}
 
-        {hotDeals.length > 0 && !selectedCategory && activeTab === 'home' && (
+        {cheapestProducts.length > 0 && !selectedCategory && activeTab === 'home' && (
           <div id="offers-section" className="mb-6 md:mb-8">
-            <HorizontalProductScroll title="Ofertas do dia" emoji="🔥" products={hotDeals} onProductClick={handleProductClick} />
+            <HorizontalProductScroll title="Ofertas Relâmpago" emoji="⚡" products={cheapestProducts} onProductClick={handleProductClick} />
           </div>
         )}
 
@@ -333,7 +386,13 @@ const Index = () => {
 
         <ProductSection
           title={getSectionTitle()}
-          emoji={activeTab === 'deals' ? '🔥' : selectedCategory ? categories.find((c) => c.id === selectedCategory)?.icon : '💎'}
+          emoji={
+            headerTab === 'Ofertas' ? '🔥' : 
+            headerTab === 'Novidades' ? '✨' : 
+            headerTab === 'Mais Vendidos' ? '🏆' : 
+            activeTab === 'deals' ? '🔥' : 
+            selectedCategory ? categories.find((c) => c.id === selectedCategory)?.icon : '💎'
+          }
           products={filteredProducts}
           onProductClick={handleProductClick}
         />
@@ -378,6 +437,8 @@ const Index = () => {
             </div>
           </motion.div>
         )}
+          </>
+        )}
       </main>
 
       <ScrollToTop />
@@ -388,7 +449,19 @@ const Index = () => {
         onCartClick={() => setIsCartOpen(true)}
         onCouponsClick={() => setIsCouponsOpen(true)}
       />
-      <ProductDrawer product={selectedProduct} isOpen={isProductDrawerOpen} onClose={() => setIsProductDrawerOpen(false)} onBuyNow={handleBuyNow} />
+      <ProductDrawer 
+        product={selectedProduct} 
+        isOpen={isProductDrawerOpen} 
+        onClose={() => {
+          setIsProductDrawerOpen(false);
+          // Limpar URL quando fechar o drawer
+          if (location.pathname.startsWith('/produto/')) {
+            navigate('/', { replace: true });
+          }
+        }} 
+        onBuyNow={handleBuyNow}
+        onProductClick={handleProductClick}
+      />
       <CartDrawer isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} />
       <CouponsDrawer isOpen={isCouponsOpen} onClose={() => setIsCouponsOpen(false)} />
       <HelpDrawer isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
@@ -398,6 +471,11 @@ const Index = () => {
         onCouponSelected={() => {
           // Cupom já foi ativado pelo modal
         }}
+      />
+      <AddressModal 
+        isOpen={isAddressModalOpen} 
+        onClose={() => setIsAddressModalOpen(false)}
+        onAddAddress={() => setIsAddressModalOpen(false)}
       />
     </div>
   );

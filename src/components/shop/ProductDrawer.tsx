@@ -1,47 +1,113 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Star, Truck, Minus, Plus, ShoppingCart, Heart, Share2, Shield, Eye, Users, RefreshCw, CreditCard, Clock, Ticket, CheckCircle2, Check, ChevronDown, FileText } from 'lucide-react';
+import { X, Star, Truck, ShoppingCart, Heart, Share2, Shield, Eye, Users, RefreshCw, CreditCard, Clock, Ticket, CheckCircle2, Check, ChevronDown, ArrowLeft } from 'lucide-react';
 import { Product } from '@/types/product';
 import { useCart } from '@/context/CartContext';
 import { useCoupons } from '@/context/CouponContext';
-import { useState, useMemo, useCallback, memo, useEffect } from 'react';
+import { useState, useMemo, useCallback, memo, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { products } from '@/data/products';
 import { ProductReviews } from './ProductReviews';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { CreatorVideosSection } from './CreatorVideosSection';
+import { HorizontalProductScroll } from './ProductSection';
+import { shareContent } from '@/utils/share';
 
 interface ProductDrawerProps {
   product: Product | null;
   isOpen: boolean;
   onClose: () => void;
   onBuyNow?: () => void;
+  onProductClick?: (product: Product) => void;
 }
 
-export const ProductDrawer = memo(({ product, isOpen, onClose, onBuyNow }: ProductDrawerProps) => {
-  const { addToCart } = useCart();
+export const ProductDrawer = memo(({ product, isOpen, onClose, onBuyNow, onProductClick }: ProductDrawerProps) => {
+  const { addToCart, items } = useCart();
   const { coupons, activeCoupon, couponTimeRemaining, activateCoupon } = useCoupons();
   const [selectedSize, setSelectedSize] = useState<string | undefined>();
   const [selectedColor, setSelectedColor] = useState<string | undefined>();
-  const [quantity, setQuantity] = useState(1);
+  const [quantity] = useState(1); // Mantener quantity para las funciones pero no mostrar el selector
   const [isLiked, setIsLiked] = useState(false);
+  const [showFullDescription, setShowFullDescription] = useState(false);
+  const [justAdded, setJustAdded] = useState(false);
+
+  // Get similar products (same category, excluding current product)
+  const similarProducts = useMemo(() => {
+    if (!product) return [];
+    return products
+      .filter(p => p.id !== product.id && p.category === product.category)
+      .slice(0, 10);
+  }, [product]);
 
   const handleActivateCoupon = useCallback((couponId: string) => {
     activateCoupon(couponId);
-    toast.success('Cupom ativado! Você tem 15 minutos para usar.');
+    toast.success('Cupom ativado! Você tem 15 minutos para usar.', { id: 'product-coupon-activated' });
   }, [activateCoupon]);
 
   // Random viewer count
   const viewerCount = useMemo(() => Math.floor(Math.random() * 200) + 50, [product?.id]);
 
+  // Verificar se o produto já está no carrinho
+  const isInCart = useMemo(() => {
+    if (!product) return false;
+    return items.some(
+      (item) =>
+        item.id === product.id &&
+        item.selectedSize === selectedSize &&
+        item.selectedColor === selectedColor
+    );
+  }, [product, items, selectedSize, selectedColor]);
+
   const handleAddToCart = useCallback(() => {
     if (!product) return;
+    
+    // Validar se cor/tamanho foram selecionados quando necessário
+    if (product.colors && product.colors.length > 0 && !selectedColor) {
+      toast.error('Por favor, selecione uma cor', { id: 'select-color-error' });
+      return;
+    }
+    
+    if (product.sizes && product.sizes.length > 0 && !selectedSize) {
+      toast.error('Por favor, selecione um tamanho', { id: 'select-size-error' });
+      return;
+    }
+    
+    // Feedback visual
+    setJustAdded(true);
+    setTimeout(() => setJustAdded(false), 2000);
+    
+    // Se o produto tiver URL, redirecionar para tráfego pago
+    if (product.url) {
+      window.open(product.url, '_blank', 'noopener,noreferrer');
+      onClose();
+      return;
+    }
+    // Caso contrário, adicionar ao carrinho normalmente
     for (let i = 0; i < quantity; i++) {
       addToCart(product, selectedSize, selectedColor);
     }
-    onClose();
-  }, [quantity, product, selectedSize, selectedColor, addToCart, onClose]);
+    // Não fechar o drawer imediatamente para mostrar feedback
+  }, [quantity, product, selectedSize, selectedColor, addToCart]);
 
   const handleBuyNow = useCallback(() => {
     if (!product) return;
+    
+    // Validar se cor/tamanho foram selecionados quando necessário
+    if (product.colors && product.colors.length > 0 && !selectedColor) {
+      toast.error('Por favor, selecione uma cor', { id: 'select-color-error-buy' });
+      return;
+    }
+    
+    if (product.sizes && product.sizes.length > 0 && !selectedSize) {
+      toast.error('Por favor, selecione um tamanho', { id: 'select-size-error-buy' });
+      return;
+    }
+    
+    // Se o produto tiver URL, redirecionar para tráfego pago
+    if (product.url) {
+      window.open(product.url, '_blank', 'noopener,noreferrer');
+      onClose();
+      return;
+    }
+    // Caso contrário, adicionar ao carrinho e chamar onBuyNow
     for (let i = 0; i < quantity; i++) {
       addToCart(product, selectedSize, selectedColor);
     }
@@ -67,36 +133,34 @@ export const ProductDrawer = memo(({ product, isOpen, onClose, onBuyNow }: Produ
   };
 
   const handleShare = useCallback(async () => {
-    const siteUrl = window.location.origin;
-    const shareText = `Confira este produto: ${product?.name} - ${siteUrl}`;
-
-    try {
-      // Tentar usar Web Share API se disponível (mobile)
+    if (!product) return;
+    
+    // Usar URL do produto se disponível, senão usar a URL atual
+    const shareUrl = product.url || `${window.location.origin}/produto/${product.id}`;
+    const shareText = `Confira este produto: ${product.name} por apenas R$ ${product.price.toFixed(2).replace('.', ',')}`;
+    
+    const success = await shareContent(
+      product.name,
+      shareText,
+      shareUrl
+    );
+    
+    if (success) {
       if (navigator.share) {
-        await navigator.share({
-          title: product?.name,
-          text: shareText,
-          url: siteUrl,
-        });
-        toast.success('Link compartilhado!');
+        toast.success('Compartilhado com sucesso!', { id: 'share-success' });
       } else {
-        // Fallback: copiar para área de transferência
-        await navigator.clipboard.writeText(siteUrl);
-        toast.success('Link copiado para a área de transferência!');
+        toast.success('Link copiado para a área de transferência!', { id: 'share-copy' });
       }
-    } catch (error) {
-      // Usuário cancelou ou erro
-      if (error instanceof Error && error.name !== 'AbortError') {
-        // Se não for cancelamento, tentar copiar
-        try {
-          await navigator.clipboard.writeText(siteUrl);
-          toast.success('Link copiado para a área de transferência!');
-        } catch (copyError) {
-          toast.error('Erro ao compartilhar link');
-        }
-      }
+    } else {
+      toast.error('Não foi possível compartilhar', { id: 'share-error' });
     }
   }, [product]);
+
+  const drawerRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
+  const dragStartY = useRef<number>(0);
+  const [dragY, setDragY] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
 
   // Bloquear scroll do body quando o drawer estiver aberto
   useEffect(() => {
@@ -116,9 +180,128 @@ export const ProductDrawer = memo(({ product, isOpen, onClose, onBuyNow }: Produ
         document.body.style.width = '';
         document.body.style.overflow = '';
         window.scrollTo(0, scrollY);
+        // Resetar estados de drag
+        setDragY(0);
+        setIsDragging(false);
       };
     }
   }, [isOpen]);
+
+  // Fazer scroll para o topo quando o produto mudar
+  useEffect(() => {
+    if (isOpen && product && drawerRef.current) {
+      // Scroll suave para o topo do drawer
+      drawerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [product?.id, isOpen]);
+
+  // Handlers para drag down no header
+  const handleDragStart = useCallback((clientY: number) => {
+    // Sempre permitir iniciar drag a partir do header, independente do scroll
+    dragStartY.current = clientY;
+    setIsDragging(true);
+    setDragY(0);
+  }, []);
+
+  const handleDragMove = useCallback((clientY: number) => {
+    if (!isDragging) return;
+    
+    const deltaY = clientY - dragStartY.current;
+    // Só permitir arrastar para baixo (valores positivos)
+    if (deltaY > 0) {
+      setDragY(deltaY);
+      return true; // Indica que o drag está ocorrendo
+    }
+    return false;
+  }, [isDragging]);
+
+  const handleDragEnd = useCallback(() => {
+    if (!isDragging) return;
+    
+    // Se arrastou mais de 100px, fechar o modal
+    const shouldClose = dragY > 100;
+    
+    if (shouldClose) {
+      // Fechar modal imediatamente se arrastou o suficiente
+      onClose();
+    } else {
+      // Resetar estados para animação suave de volta
+      setIsDragging(false);
+      setDragY(0);
+    }
+  }, [isDragging, dragY, onClose]);
+
+  // Touch handlers
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    // Não prevenir comportamento padrão no start, deixar o scroll funcionar
+    handleDragStart(e.touches[0].clientY);
+  }, [handleDragStart]);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (isDragging) {
+      const shouldPrevent = handleDragMove(e.touches[0].clientY);
+      if (shouldPrevent) {
+        e.preventDefault();
+      }
+    }
+  }, [handleDragMove, isDragging]);
+
+  const handleTouchEnd = useCallback(() => {
+    handleDragEnd();
+  }, [handleDragEnd]);
+
+  // Mouse handlers (para desktop com mouse)
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    handleDragStart(e.clientY);
+  }, [handleDragStart]);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (isDragging) {
+      handleDragMove(e.clientY);
+    }
+  }, [isDragging, handleDragMove]);
+
+  const handleMouseUp = useCallback(() => {
+    handleDragEnd();
+  }, [handleDragEnd]);
+
+  // Global mouse handlers para continuar drag mesmo fora do header
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      handleDragMove(e.clientY);
+    };
+
+    const handleGlobalMouseUp = () => {
+      handleDragEnd();
+    };
+
+    const handleGlobalTouchMove = (e: TouchEvent) => {
+      if (isDragging && e.touches.length > 0) {
+        const shouldPrevent = handleDragMove(e.touches[0].clientY);
+        if (shouldPrevent) {
+          e.preventDefault();
+        }
+      }
+    };
+
+    const handleGlobalTouchEnd = () => {
+      handleDragEnd();
+    };
+
+    document.addEventListener('mousemove', handleGlobalMouseMove);
+    document.addEventListener('mouseup', handleGlobalMouseUp);
+    document.addEventListener('touchmove', handleGlobalTouchMove, { passive: false });
+    document.addEventListener('touchend', handleGlobalTouchEnd);
+
+    return () => {
+      document.removeEventListener('mousemove', handleGlobalMouseMove);
+      document.removeEventListener('mouseup', handleGlobalMouseUp);
+      document.removeEventListener('touchmove', handleGlobalTouchMove);
+      document.removeEventListener('touchend', handleGlobalTouchEnd);
+    };
+  }, [isDragging, handleDragMove, handleDragEnd]);
 
   if (!product || !isOpen) return null;
 
@@ -136,28 +319,59 @@ export const ProductDrawer = memo(({ product, isOpen, onClose, onBuyNow }: Produ
 
         {/* Drawer */}
         <motion.div
+          ref={drawerRef}
           initial={{ y: '100%', opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
+          animate={{ 
+            y: isDragging ? dragY : 0,
+            opacity: 1
+          }}
           exit={{ y: '100%', opacity: 0 }}
-          transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+          transition={isDragging ? { type: 'tween', duration: 0 } : { type: 'spring', damping: 30, stiffness: 300 }}
           onClick={(e) => e.stopPropagation()}
-          className="fixed bottom-0 left-0 right-0 z-[60] bg-card rounded-t-3xl max-h-[90vh] overflow-y-auto shadow-2xl"
+          className="fixed bottom-0 left-0 right-0 z-[60] bg-card rounded-t-3xl max-h-[85vh] overflow-y-auto shadow-2xl safe-area-inset-bottom"
         >
+            {/* Botão de voltar fixo no topo */}
+            <div 
+              ref={headerRef}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+              onMouseDown={handleMouseDown}
+              onMouseMove={handleMouseMove}
+              onMouseUp={handleMouseUp}
+              className="sticky top-0 bg-card z-20 border-b border-border safe-area-inset-top cursor-grab active:cursor-grabbing select-none"
+            >
+              <div className="flex items-center gap-3 px-4 md:px-6 py-3">
+                <button
+                  onClick={onClose}
+                  className="p-2 rounded-full hover:bg-muted transition-colors touch-manipulation"
+                  aria-label="Voltar"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
+                <div className="flex-1">
+                  <h2 className="text-lg font-semibold">Detalhes do produto</h2>
+                </div>
+              </div>
+            </div>
+
             {/* Handle */}
-            <div className="sticky top-0 bg-card pt-3 pb-2 z-10">
+            <div className="pt-2 pb-1">
               <div className="w-12 h-1 bg-muted rounded-full mx-auto" />
             </div>
 
             {/* Header */}
-            <div className="flex items-center justify-between px-4 pb-4 pt-4">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 bg-gradient-to-r from-tiktok-cyan to-tiktok-pink rounded-full flex items-center justify-center text-white text-xs font-bold">
+            <div className="flex items-center justify-between px-4 md:px-6 pb-5 pt-2">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 bg-gradient-to-r from-tiktok-cyan to-tiktok-pink rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
                   {product.brand?.charAt(0)}
                 </div>
-                <span className="font-semibold text-foreground text-sm">{product.brand}</span>
-                <span className="text-primary">✓</span>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="font-semibold text-foreground text-sm truncate">{product.brand}</span>
+                  <span className="text-primary flex-shrink-0">✓</span>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 flex-shrink-0">
                 <button className="p-2 rounded-full hover:bg-muted transition-colors">
                   <ShoppingCart className="w-5 h-5" />
                 </button>
@@ -177,9 +391,9 @@ export const ProductDrawer = memo(({ product, isOpen, onClose, onBuyNow }: Produ
             </div>
 
             {/* Content Container */}
-            <div className="px-4">
+            <div className="px-4 md:px-6 pb-2">
               {/* Product Image */}
-              <div className="relative aspect-square mx-auto max-w-md rounded-2xl overflow-hidden bg-muted mb-4">
+              <div className="relative aspect-square mx-auto w-full max-w-sm rounded-2xl overflow-hidden bg-muted mb-5 shadow-sm">
               <img
                 src={product.image}
                 alt={product.name}
@@ -216,27 +430,17 @@ export const ProductDrawer = memo(({ product, isOpen, onClose, onBuyNow }: Produ
                     </div>
                   )}
                 </div>
-                <div className="flex gap-1">
-                  {[...Array(4)].map((_, i) => (
-                    <div
-                      key={i}
-                      className={`w-1.5 h-1.5 rounded-full ${
-                        i === 0 ? 'bg-white' : 'bg-white/40'
-                      }`}
-                    />
-                  ))}
-                </div>
               </div>
             </div>
 
             {/* Product Info */}
-            <div className="p-4 space-y-4">
+            <div className="px-4 md:px-6 pb-8 space-y-5">
               {/* Title and Actions */}
-              <div className="flex items-start justify-between gap-4">
-                <h2 className="text-lg font-semibold text-foreground flex-1">
+              <div className="flex items-start justify-between gap-3">
+                <h2 className="text-lg md:text-xl font-semibold text-foreground flex-1 line-clamp-2 leading-tight">
                   {product.name}
                 </h2>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-shrink-0">
                   <button 
                     onClick={handleShare}
                     className="p-2 rounded-full border border-border hover:bg-muted transition-colors"
@@ -253,26 +457,36 @@ export const ProductDrawer = memo(({ product, isOpen, onClose, onBuyNow }: Produ
                 </div>
               </div>
 
-              {/* Price with Free Shipping on same line */}
-              <div className="flex items-center gap-3 flex-wrap">
-                <span className="text-2xl font-bold text-primary">
-                  R$ {product.price.toFixed(2).replace('.', ',')}
-                </span>
-                {product.originalPrice && (
-                  <>
-                    <span className="text-lg text-muted-foreground line-through">
-                      R$ {product.originalPrice.toFixed(2).replace('.', ',')}
-                    </span>
-                    <span className="bg-primary/10 text-primary text-sm font-semibold px-2 py-0.5 rounded">
-                      -{discountPercent}%
-                    </span>
-                  </>
+              {/* Price */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <span className="text-2xl md:text-3xl font-bold text-primary">
+                    R$ {product.price.toFixed(2).replace('.', ',')}
+                  </span>
+                  {product.originalPrice && (
+                    <>
+                      <span className="text-lg md:text-xl text-muted-foreground line-through">
+                        R$ {product.originalPrice.toFixed(2).replace('.', ',')}
+                      </span>
+                      <span className="bg-primary/10 text-primary text-sm font-semibold px-2.5 py-1 rounded">
+                        -{discountPercent}%
+                      </span>
+                    </>
+                  )}
+                </div>
+                {/* Installments */}
+                {product.price >= 20 && (
+                  <span className="text-sm text-muted-foreground">
+                    {Math.ceil(product.price / 20)}x de R$ {(product.price / Math.ceil(product.price / 20)).toFixed(2).replace('.', ',')}
+                  </span>
                 )}
                 {product.freeShipping && (
-                  <span className="text-success text-xs font-medium flex items-center gap-1">
-                    <Truck className="w-3 h-3" />
-                    Frete grátis +R$99
-                  </span>
+                  <div className="flex items-center gap-1">
+                    <span className="text-success text-sm md:text-base font-medium flex items-center gap-1">
+                      <Truck className="w-4 h-4" />
+                      Frete grátis acima de R$99
+                    </span>
+                  </div>
                 )}
               </div>
 
@@ -295,19 +509,25 @@ export const ProductDrawer = memo(({ product, isOpen, onClose, onBuyNow }: Produ
                 </div>
               )}
 
-              {/* Rating and Stats */}
-              <div className="flex items-center gap-4 flex-wrap">
-                <div className="flex items-center gap-1">
-                  <Star className="w-5 h-5 fill-warning text-warning" />
-                  <span className="font-semibold">{product.rating}</span>
+              {/* Rating and Stats - Sempre em uma linha */}
+              <div className="flex items-center gap-2 md:gap-3 flex-wrap">
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <Star className="w-4 h-4 md:w-5 md:h-5 fill-warning text-warning" />
+                  <span className="font-semibold text-sm md:text-base">{product.rating}</span>
                 </div>
-                <span className="text-muted-foreground">
+                <span className="text-muted-foreground text-sm md:text-base whitespace-nowrap">
                   {formatNumber(product.soldCount)} vendidos
                 </span>
                 {product.viewCount && (
-                  <span className="text-muted-foreground flex items-center gap-1">
-                    <Eye className="w-4 h-4" />
-                    {formatNumber(product.viewCount)} visualizações
+                  <span className="text-muted-foreground flex items-center gap-1 text-sm md:text-base whitespace-nowrap">
+                    <Eye className="w-4 h-4 md:w-5 md:h-5" />
+                    {formatNumber(product.viewCount)}
+                  </span>
+                )}
+                {product.likesCount && (
+                  <span className="text-muted-foreground flex items-center gap-1 text-sm md:text-base whitespace-nowrap">
+                    <Heart className="w-4 h-4 md:w-5 md:h-5" />
+                    {formatNumber(product.likesCount)}
                   </span>
                 )}
               </div>
@@ -360,65 +580,45 @@ export const ProductDrawer = memo(({ product, isOpen, onClose, onBuyNow }: Produ
                 </div>
               )}
 
-              {/* Quantity */}
-              <div>
-                <p className="text-sm font-medium mb-2">Quantidade</p>
-                <div className="flex items-center gap-4">
-                  <button
-                    onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                    className="w-10 h-10 rounded-full border border-border flex items-center justify-center hover:bg-muted transition-colors"
-                  >
-                    <Minus className="w-4 h-4" />
-                  </button>
-                  <span className="text-lg font-semibold w-8 text-center">{quantity}</span>
-                  <button
-                    onClick={() => setQuantity(quantity + 1)}
-                    className="w-10 h-10 rounded-full border border-border flex items-center justify-center hover:bg-muted transition-colors"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Product Description - Expandable */}
+              {/* Product Description */}
               {product.description && (
-                <div className="bg-card rounded-xl border border-border overflow-hidden">
-                  <Accordion type="single" collapsible className="w-full">
-                    <AccordionItem value="description" className="border-none">
-                      <AccordionTrigger className="px-4 py-3 hover:no-underline">
-                        <div className="flex items-center gap-2">
-                          <FileText className="w-5 h-5 text-primary" />
-                          <span className="font-semibold">Descrição do Produto</span>
-                        </div>
-                      </AccordionTrigger>
-                      <AccordionContent className="px-4 pb-4">
-                        <div className="text-sm text-foreground whitespace-pre-line leading-relaxed">
-                          {product.description.split('**').map((part, index) => {
-                            if (index % 2 === 1) {
-                              return <strong key={index} className="font-semibold">{part}</strong>;
-                            }
-                            return <span key={index}>{part}</span>;
-                          })}
-                        </div>
-                      </AccordionContent>
-                    </AccordionItem>
-                  </Accordion>
+                <div className="space-y-2">
+                  <h3 className="text-base font-semibold">Sobre este produto</h3>
+                  <div className="text-sm text-foreground whitespace-pre-line leading-relaxed">
+                    {(showFullDescription || product.description.length <= 500
+                      ? product.description
+                      : product.description.substring(0, 500) + '...'
+                    ).split('**').map((part, index) => {
+                      if (index % 2 === 1) {
+                        return <strong key={index} className="font-semibold">{part}</strong>;
+                      }
+                      return <span key={index}>{part}</span>;
+                    })}
+                  </div>
+                  {product.description.length > 500 && (
+                    <button
+                      onClick={() => setShowFullDescription(!showFullDescription)}
+                      className="text-primary text-sm font-medium hover:underline"
+                    >
+                      {showFullDescription ? 'Ver menos' : 'Ver mais'}
+                    </button>
+                  )}
                 </div>
               )}
 
-              {/* Available Coupons Section */}
+              {/* Available Coupons Section - Ofertas */}
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
                   <Ticket className="w-5 h-5 text-primary" />
-                  <h3 className="text-base font-semibold">Cupons Disponíveis</h3>
+                  <h3 className="text-base font-semibold">Ofertas</h3>
                 </div>
-                <div className="space-y-2">
-                  {coupons.map((coupon) => (
+                <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
+                  {coupons.filter((coupon) => coupon.id !== '4').map((coupon) => (
                     <motion.div
                       key={coupon.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className={`relative overflow-hidden rounded-xl border-2 ${
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      className={`relative overflow-hidden rounded-xl border-2 flex-shrink-0 min-w-[280px] ${
                         coupon.isActivated
                           ? 'border-success bg-success/5'
                           : 'border-border bg-muted/30'
@@ -451,7 +651,7 @@ export const ProductDrawer = memo(({ product, isOpen, onClose, onBuyNow }: Produ
                               onClick={() => handleActivateCoupon(coupon.id)}
                               className="px-3 py-1.5 bg-primary text-primary-foreground rounded-full text-xs font-semibold hover:opacity-90 transition-opacity flex-shrink-0"
                             >
-                              Ativar
+                              Resgatar
                             </button>
                           ) : (
                             <span className="px-3 py-1.5 bg-success/10 text-success rounded-full text-xs font-semibold flex-shrink-0">
@@ -464,6 +664,25 @@ export const ProductDrawer = memo(({ product, isOpen, onClose, onBuyNow }: Produ
                   ))}
                 </div>
               </div>
+
+              {/* Creator Videos Section */}
+              {product.creatorVideos && product.creatorVideos.length > 0 && (
+                <div className="pt-4 border-t border-border">
+                  <CreatorVideosSection 
+                    videos={product.creatorVideos || []} 
+                    product={product}
+                    onProductClick={() => {
+                      // Se o produto tiver URL, abrir em nova aba
+                      if (product.url) {
+                        window.open(product.url, '_blank', 'noopener,noreferrer');
+                        return;
+                      }
+                      // Caso contrário, já estamos no drawer do produto, apenas fechar o vídeo
+                      // El drawer ya está abierto, solo hacemos scroll hacia arriba cuando se cierra el modal
+                    }}
+                  />
+                </div>
+              )}
 
               {/* Store Information */}
               {product.brand && (() => {
@@ -566,24 +785,62 @@ export const ProductDrawer = memo(({ product, isOpen, onClose, onBuyNow }: Produ
                   />
                 </div>
               )}
-            </div>
+
+              {/* Recommended Products */}
+              {similarProducts.length > 0 && (
+                <div className="pt-4 border-t border-border">
+                  <HorizontalProductScroll
+                    title="Você também pode gostar"
+                    products={similarProducts}
+                    onProductClick={(p) => {
+                      if (onProductClick) {
+                        // Fazer scroll para o topo antes de mudar o produto
+                        if (drawerRef.current) {
+                          drawerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+                        }
+                        // Pequeno delay para garantir que o scroll comece antes de mudar o produto
+                        setTimeout(() => {
+                          onProductClick(p);
+                        }, 100);
+                      }
+                    }}
+                  />
+                </div>
+              )}
             </div>
 
             {/* Bottom Actions */}
-            <div className="sticky bottom-0 bg-card border-t border-border p-4 safe-bottom">
-              <div className="flex gap-3">
-                <button
-                  onClick={handleAddToCart}
-                  className="flex-1 py-4 px-6 border-2 border-foreground text-foreground rounded-full font-semibold hover:bg-muted transition-colors text-sm"
-                >
-                  Adicionar ao carrinho
-                </button>
-                <button
-                  onClick={handleBuyNow}
-                  className="flex-1 py-4 px-6 bg-gradient-to-r from-tiktok-pink to-primary text-white rounded-full font-semibold hover:opacity-90 transition-opacity text-sm"
-                >
-                  Comprar agora
-                </button>
+            <div className="sticky bottom-0 bg-card border-t border-border px-4 md:px-6 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]" style={{ paddingTop: '1rem', paddingBottom: 'max(1rem, env(safe-area-inset-bottom, 1rem))' }}>
+              <div className="flex gap-3 max-w-2xl mx-auto">
+                  <motion.button
+                    onClick={handleAddToCart}
+                    whileTap={{ scale: 0.98 }}
+                    className={`flex-1 py-3.5 md:py-4 px-4 md:px-6 border-2 rounded-full font-semibold transition-all text-sm md:text-base flex items-center justify-center gap-2 ${
+                      justAdded 
+                        ? 'border-success bg-success/10 text-success' 
+                        : 'border-foreground text-foreground hover:bg-muted'
+                    }`}
+                  >
+                    {justAdded ? (
+                      <>
+                        <CheckCircle2 className="w-5 h-5" />
+                        <span>Adicionado!</span>
+                      </>
+                    ) : (
+                      <>
+                        <ShoppingCart className="w-5 h-5" />
+                        <span>{isInCart ? 'Adicionar novamente' : 'Adicionar ao carrinho'}</span>
+                      </>
+                    )}
+                  </motion.button>
+                  <motion.button
+                    onClick={handleBuyNow}
+                    whileTap={{ scale: 0.98 }}
+                    className="flex-1 py-3.5 md:py-4 px-4 md:px-6 bg-gradient-to-r from-tiktok-pink to-primary text-white rounded-full font-semibold hover:opacity-90 transition-opacity text-sm md:text-base flex items-center justify-center gap-2"
+                  >
+                    <span>Comprar agora</span>
+                  </motion.button>
+                </div>
               </div>
             </div>
           </motion.div>

@@ -217,13 +217,13 @@ export const CouponProvider = ({ children }: { children: ReactNode }) => {
 
 
   const getApplicableCoupon = (orderTotal: number): Coupon | null => {
-    // Cupom de primeira compra (R$5) - aplica para todos quando ativo
-    if (activeCoupon && activeCoupon.id === '4' && orderTotal > 0) {
+    // Cupom de primeira compra (R$5) - só aplica se for realmente primeira compra
+    if (activeCoupon && activeCoupon.id === '4' && orderTotal > 0 && isFirstPurchase()) {
       return activeCoupon;
     }
 
     // Cupom ativo normal (verificar se atende ao valor mínimo)
-    if (activeCoupon && orderTotal >= activeCoupon.minOrder) {
+    if (activeCoupon && activeCoupon.id !== '4' && orderTotal >= activeCoupon.minOrder) {
       return activeCoupon;
     }
     return null;

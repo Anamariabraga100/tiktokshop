@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShoppingCart, HelpCircle, Bell, ChevronDown, X } from 'lucide-react';
+import { ShoppingCart, HelpCircle, Bell, ChevronDown, X, TrendingUp, Star, MapPin } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
+import { useCustomer } from '@/context/CustomerContext';
 import { categories } from '@/data/products';
 
 interface HeaderProps {
@@ -10,18 +11,24 @@ interface HeaderProps {
   onCouponsClick?: () => void;
   onTabClick?: (tab: string) => void;
   activeHeaderTab?: string | null;
+  onAddressClick?: () => void;
 }
 
-export const Header = ({ onCartClick, onCategorySelect, onCouponsClick, onTabClick, activeHeaderTab }: HeaderProps) => {
+export const Header = ({ onCartClick, onCategorySelect, onCouponsClick, onTabClick, activeHeaderTab, onAddressClick }: HeaderProps) => {
   const { totalItems } = useCart();
+  const { customerData } = useCustomer();
   const [showCategories, setShowCategories] = useState(false);
+  const hasAddress = !!customerData?.address?.rua && !!customerData?.address?.cep;
 
-  const tabs = ['Ajuda', 'Explorar', 'Categorias', 'Loja', 'Para você'];
-  const activeTab = activeHeaderTab || 'Loja';
+  const tabs = ['Ajuda', 'Categorias', 'Novidades', 'Mais Vendidos'];
+  const activeTab = activeHeaderTab || null;
 
   const handleTabClick = (tab: string) => {
     if (tab === 'Categorias') {
       setShowCategories(!showCategories);
+    } else if (tab === 'Endereço') {
+      // Endereço abre o modal diretamente
+      onAddressClick?.();
     } else {
       onTabClick?.(tab);
     }
@@ -42,30 +49,22 @@ export const Header = ({ onCartClick, onCategorySelect, onCouponsClick, onTabCli
       >
         <div className="flex items-center justify-between px-4 py-3 md:px-6 md:py-4 max-w-7xl mx-auto">
           {/* Tabs */}
-          <div className="flex items-center gap-4 md:gap-6 overflow-x-auto scrollbar-hide">
+          <div className="flex items-center gap-3 md:gap-4 lg:gap-6 overflow-x-auto scrollbar-hide flex-1">
             {tabs.map((tab) => (
               <button
                 key={tab}
                 onClick={() => handleTabClick(tab)}
-                className={`relative flex items-center gap-1 text-sm md:text-base font-medium whitespace-nowrap transition-colors ${
+                className={`relative flex items-center gap-1 text-xs md:text-sm lg:text-base font-medium whitespace-nowrap transition-colors ${
                   tab === activeTab
                     ? 'text-foreground'
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
-                {tab === 'Ajuda' && <HelpCircle className="w-4 h-4 text-primary" />}
-                {tab === 'Para você' && activeTab === 'Para você' && (
-                  <motion.span
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    className="w-1.5 h-1.5 bg-primary rounded-full absolute -top-0.5 -right-2"
-                  />
-                )}
+                {tab === 'Ajuda' && <HelpCircle className="w-3 h-3 md:w-4 md:h-4 text-primary" />}
+                {tab === 'Novidades' && <Star className="w-3 h-3 md:w-4 md:h-4 text-primary" />}
+                {tab === 'Mais Vendidos' && <TrendingUp className="w-3 h-3 md:w-4 md:h-4 text-primary" />}
                 {tab}
                 {tab === 'Categorias' && <ChevronDown className={`w-3 h-3 transition-transform ${showCategories ? 'rotate-180' : ''}`} />}
-                {tab === 'Loja' && activeTab === 'Loja' && (
-                  <span className="w-1.5 h-1.5 bg-primary rounded-full absolute -top-0.5 -right-2" />
-                )}
                 {tab === activeTab && (
                   <motion.div
                     layoutId="headerActiveTab"
@@ -74,13 +73,27 @@ export const Header = ({ onCartClick, onCategorySelect, onCouponsClick, onTabCli
                 )}
               </button>
             ))}
+            
+            {/* Endereço Button - substituindo Ofertas */}
+            {onAddressClick && (
+              <button
+                onClick={() => handleTabClick('Endereço')}
+                className={`relative flex items-center gap-1 text-xs md:text-sm lg:text-base font-medium whitespace-nowrap transition-colors ${
+                  'text-foreground'
+                }`}
+              >
+                <MapPin className="w-3 h-3 md:w-4 md:h-4 text-primary" />
+                Endereço
+              </button>
+            )}
           </div>
 
           {/* Actions */}
-          <div className="flex items-center gap-2 md:gap-3">
+          <div className="flex items-center gap-2 md:gap-3 flex-shrink-0 ml-2 md:ml-4">
             <button 
               onClick={onCouponsClick}
               className="relative p-2 md:p-2.5 hover:bg-muted rounded-lg transition-colors"
+              aria-label="Notificações"
             >
               <Bell className="w-5 h-5 md:w-6 md:h-6" />
               <span className="absolute top-1 right-1 w-2 h-2 bg-primary rounded-full" />
@@ -90,8 +103,9 @@ export const Header = ({ onCartClick, onCategorySelect, onCouponsClick, onTabCli
               whileTap={{ scale: 0.95 }}
               onClick={onCartClick}
               className="relative p-2 md:p-2.5 hover:bg-muted rounded-lg transition-colors"
+              aria-label="Carrinho"
             >
-              <ShoppingCart className="w-6 h-6" />
+              <ShoppingCart className="w-5 h-5 md:w-6 md:h-6" />
               {totalItems > 0 && (
                 <motion.span
                   initial={{ scale: 0 }}

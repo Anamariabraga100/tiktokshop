@@ -25,7 +25,7 @@ export const ExitCouponModal = ({ isOpen, onClose, onCouponSelected }: ExitCoupo
       return;
     }
     activateCoupon(selectedCouponId);
-    toast.success('Cupom ativado! Você tem 15 minutos para usar.');
+    toast.success('Cupom ativado! Você tem 15 minutos para usar.', { id: 'exit-coupon-activated' });
     onCouponSelected();
     onClose();
   };
@@ -75,7 +75,7 @@ export const ExitCouponModal = ({ isOpen, onClose, onCouponSelected }: ExitCoupo
 
               {/* Coupons List */}
               <div className="space-y-3 mb-6">
-                {coupons.map((coupon) => (
+                {coupons.filter((coupon) => coupon.id !== '4').map((coupon) => (
                   <motion.button
                     key={coupon.id}
                     whileHover={{ scale: 1.02 }}

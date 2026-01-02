@@ -59,6 +59,35 @@ This project is built with:
 - React
 - shadcn-ui
 - Tailwind CSS
+- Supabase (para armazenamento de dados)
+- UmbrellaPag (gateway de pagamento PIX)
+
+## Configuração
+
+### Supabase
+
+Este projeto usa Supabase para armazenar dados de clientes e pedidos na nuvem.
+
+📖 **Guia completo**: Veja [SUPABASE_SETUP.md](./SUPABASE_SETUP.md) para instruções detalhadas.
+
+**Resumo rápido:**
+1. Crie um projeto no [Supabase](https://app.supabase.com)
+2. Execute o SQL em `supabase-schema.sql` no SQL Editor
+3. Se já criou a tabela antes, execute `supabase-update-orders.sql` para adicionar campos do UmbrellaPag
+
+### UmbrellaPag
+
+Gateway de pagamento integrado para processar pagamentos PIX.
+
+📖 **Guia completo**: Veja [UMBRELLAPAG_SETUP.md](./UMBRELLAPAG_SETUP.md) para instruções detalhadas.
+
+**Configuração no `.env`:**
+```env
+VITE_SUPABASE_URL=sua_url_do_projeto
+VITE_SUPABASE_ANON_KEY=sua_chave_anon
+VITE_UMBRELLAPAG_API_KEY=sua_api_key_umbrellapag
+VITE_POSTBACK_URL=https://seusite.com/api/webhook
+```
 
 ## How can I deploy this project?
 

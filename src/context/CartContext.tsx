@@ -28,7 +28,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       );
 
       if (existingItem) {
-        toast.success('Quantidade atualizada!');
+        // Não mostrar notificação de quantidade atualizada
         return prev.map((item) =>
           item.id === product.id &&
           item.selectedSize === size &&
@@ -38,7 +38,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         );
       }
 
-      toast.success('Adicionado ao carrinho!');
+      toast.success('Adicionado ao carrinho!', { id: `cart-add-${product.id}` });
       return [
         ...prev,
         { ...product, quantity: 1, selectedSize: size, selectedColor: color },
@@ -54,7 +54,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
     setItems((prev) => prev.filter((item) => item.id !== productId));
-    toast.success('Removido do carrinho!');
+    toast.success('Removido do carrinho!', { id: `cart-remove-${productId}` });
   };
 
   const updateQuantity = (productId: string, quantity: number) => {
@@ -77,7 +77,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
 
   const clearCart = () => {
     setItems([]);
-    toast.success('Carrinho limpo!');
+    // Não mostrar toast ao limpar carrinho após pagamento
   };
 
   // Calcular total sem brindes
@@ -110,7 +110,12 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     if (hasGift && !hasGiftInCart) {
       // Adicionar brinde
       setItems((prev) => [...prev, giftProduct]);
-      toast.success('🎁 Brinde adicionado! Mini Kit de Canetas Coloridas');
+      // Adicionar delay para que a notificação apareça após a notificação de produto adicionado
+      setTimeout(() => {
+        toast.success('🎁 Brinde adicionado! Mini Kit de Canetas Coloridas', {
+          id: 'gift-added',
+        });
+      }, 300);
     } else if (!hasGift && hasGiftInCart) {
       // Remover brinde se o valor cair abaixo de R$100
       setItems((prev) => prev.filter(item => item.id !== 'gift-mini-kit-canetas'));

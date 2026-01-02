@@ -2,7 +2,7 @@ import { motion } from 'framer-motion';
 import { Star, Truck, ShoppingCart, Heart, TrendingUp, Award, Check } from 'lucide-react';
 import { Product } from '@/types/product';
 import { useCart } from '@/context/CartContext';
-import { useState, useMemo, useCallback, memo } from 'react';
+import { useState, useMemo, useCallback, memo, useRef } from 'react';
 import { useCoupons } from '@/context/CouponContext';
 import { toast } from 'sonner';
 
@@ -17,18 +17,32 @@ export const ProductCard = memo(({ product, onClick, index = 0 }: ProductCardPro
   const { activeCoupon } = useCoupons();
   const [isLiked, setIsLiked] = useState(false);
   const [justAdded, setJustAdded] = useState(false);
-
-  const handleQuickAdd = useCallback((e: React.MouseEvent) => {
+  const handleQuickAdd = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
     e.stopPropagation();
+    
+    // Verificar se o produto requer seleção de cor ou tamanho
+    const requiresColor = product.colors && product.colors.length > 0;
+    const requiresSize = product.sizes && product.sizes.length > 0;
+    
+    // Se requer seleção, abrir o drawer em vez de adicionar diretamente
+    if (requiresColor || requiresSize) {
+      onClick();
+      return;
+    }
+    
+    // Caso contrário, adicionar diretamente
     addToCart(product, product.sizes?.[0], product.colors?.[0]);
     setJustAdded(true);
     toast.success('Produto adicionado ao carrinho!', {
       duration: 2000,
+      id: `cart-add-${product.id}`,
     });
     setTimeout(() => setJustAdded(false), 2000);
-  }, [product, addToCart]);
+  }, [product, addToCart, onClick]);
 
-  const handleLike = useCallback((e: React.MouseEvent) => {
+  const handleLike = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
     e.stopPropagation();
     setIsLiked(!isLiked);
   }, [isLiked]);
@@ -49,14 +63,22 @@ export const ProductCard = memo(({ product, onClick, index = 0 }: ProductCardPro
   // Determine if product is bestseller (sold more than 4000)
   const isBestSeller = product.soldCount > 4000;
 
+  const handleCardClick = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    const target = e.target as HTMLElement;
+    // Não executar se clicou em um botão ou elemento interativo
+    if (target.closest('button') || target.closest('[role="button"]')) {
+      return;
+    }
+    onClick();
+  }, [onClick]);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: Math.min(index * 0.03, 0.2) }}
-      whileTap={{ scale: 0.98 }}
-      onClick={onClick}
-      className="bg-card rounded-2xl overflow-hidden shadow-card hover:shadow-card-hover transition-all duration-300 cursor-pointer group md:hover:scale-[1.02] will-change-transform"
+      onClick={handleCardClick}
+      className="bg-card rounded-2xl overflow-hidden shadow-card hover:shadow-card-hover transition-all duration-300 cursor-pointer group md:hover:scale-[1.02] will-change-transform touch-manipulation active:scale-[0.98]"
     >
       <div className="relative aspect-[3/4] overflow-hidden bg-muted md:aspect-square lg:aspect-[3/4]">
         <img
@@ -87,12 +109,8 @@ export const ProductCard = memo(({ product, onClick, index = 0 }: ProductCardPro
         <motion.button
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.9 }}
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            handleLike(e);
-          }}
-          className="absolute top-2 right-2 w-8 h-8 bg-card/80 backdrop-blur-sm rounded-full shadow-lg flex items-center justify-center z-10"
+          onClick={handleLike}
+          className="absolute top-2 right-2 w-8 h-8 bg-card/80 backdrop-blur-sm rounded-full shadow-lg flex items-center justify-center z-20 touch-manipulation"
         >
           <Heart className={`w-4 h-4 transition-colors ${isLiked ? 'fill-primary text-primary' : 'text-foreground'}`} />
         </motion.button>
@@ -101,12 +119,8 @@ export const ProductCard = memo(({ product, onClick, index = 0 }: ProductCardPro
         <motion.button
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.9 }}
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            handleQuickAdd(e);
-          }}
-          className={`absolute bottom-2 right-2 w-10 h-10 rounded-full shadow-lg flex items-center justify-center text-primary-foreground opacity-0 group-hover:opacity-100 transition-all z-10 ${
+          onClick={handleQuickAdd}
+          className={`absolute bottom-2 right-2 w-10 h-10 rounded-full shadow-lg flex items-center justify-center text-primary-foreground opacity-0 group-hover:opacity-100 transition-all z-20 touch-manipulation ${
             justAdded ? 'bg-success opacity-100' : 'bg-primary'
           }`}
         >

@@ -84,7 +84,12 @@ export const HorizontalProductScroll = ({
               className="flex-shrink-0 w-40 md:w-auto"
             >
               <div 
-                onClick={() => onProductClick(product)}
+                onClick={(e) => {
+                  const target = e.target as HTMLElement;
+                  if (!target.closest('button')) {
+                    onProductClick(product);
+                  }
+                }}
                 className="cursor-pointer group"
               >
                 <div className="relative aspect-square rounded-xl overflow-hidden bg-muted mb-2">
