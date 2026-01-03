@@ -17,10 +17,19 @@ const queryClient = new QueryClient();
 // Inicializar Facebook Pixel
 const FacebookPixelInit = () => {
   useEffect(() => {
-    const pixelId = import.meta.env.VITE_FACEBOOK_PIXEL_ID;
+    // Tentar obter Pixel ID de diferentes formas
+    const pixelId = import.meta.env.VITE_FACEBOOK_PIXEL_ID || 
+                    import.meta.env.FACEBOOK_PIXEL_ID;
+    
     if (pixelId) {
+      console.log('✅ Inicializando Facebook Pixel:', pixelId);
       initFacebookPixel(pixelId);
-      trackPageView();
+      // Aguardar um pouco antes de rastrear PageView para garantir que o pixel carregou
+      setTimeout(() => {
+        trackPageView();
+      }, 500);
+    } else {
+      console.warn('⚠️ Facebook Pixel ID não configurado. Configure VITE_FACEBOOK_PIXEL_ID nas variáveis de ambiente.');
     }
   }, []);
 

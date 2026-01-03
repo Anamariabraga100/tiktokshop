@@ -27,8 +27,8 @@ export default async function handler(req, res) {
       });
     }
 
-    // Verificar configurações
-    const PIXEL_ID = process.env.FACEBOOK_PIXEL_ID;
+    // Verificar configurações (aceitar ambos os nomes para compatibilidade)
+    const PIXEL_ID = process.env.FACEBOOK_PIXEL_ID || process.env.VITE_FACEBOOK_PIXEL_ID;
     const ACCESS_TOKEN = process.env.FACEBOOK_ACCESS_TOKEN;
 
     if (!PIXEL_ID || !ACCESS_TOKEN) {

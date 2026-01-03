@@ -235,12 +235,22 @@ function getFbcFromUrl(): string | null {
  * Inicializar Facebook Pixel (script básico para rastreamento no navegador também)
  */
 export function initFacebookPixel(pixelId: string): void {
-  if (typeof window === 'undefined' || (window as any).fbq) {
-    return; // Já inicializado ou não está no navegador
+  if (typeof window === 'undefined') {
+    console.warn('⚠️ initFacebookPixel: window não está disponível');
+    return; // Não está no navegador
   }
+
+  // Verificar se já foi inicializado
+  if ((window as any).fbq) {
+    console.log('ℹ️ Facebook Pixel já inicializado');
+    return;
+  }
+
+  console.log('🚀 Inicializando Facebook Pixel com ID:', pixelId);
 
   // Criar script do Facebook Pixel
   const script = document.createElement('script');
+  script.id = 'facebook-pixel-script';
   script.innerHTML = `
     !function(f,b,e,v,n,t,s)
     {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
@@ -251,13 +261,31 @@ export function initFacebookPixel(pixelId: string): void {
     s.parentNode.insertBefore(t,s)}(window, document,'script',
     'https://connect.facebook.net/en_US/fbevents.js');
     fbq('init', '${pixelId}');
-    fbq('track', 'PageView');
+    console.log('✅ Facebook Pixel inicializado com sucesso');
   `;
+  
+  // Adicionar listener para quando o script carregar
+  script.onload = () => {
+    console.log('✅ Script do Facebook Pixel carregado');
+    if ((window as any).fbq) {
+      (window as any).fbq('track', 'PageView');
+      console.log('✅ PageView rastreado');
+    }
+  };
+  
+  script.onerror = () => {
+    console.error('❌ Erro ao carregar script do Facebook Pixel');
+  };
+  
   document.head.appendChild(script);
 
   // Também criar noscript para casos sem JavaScript
-  const noscript = document.createElement('noscript');
-  noscript.innerHTML = `<img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=${pixelId}&ev=PageView&noscript=1"/>`;
-  document.body.appendChild(noscript);
+  const existingNoscript = document.getElementById('facebook-pixel-noscript');
+  if (!existingNoscript) {
+    const noscript = document.createElement('noscript');
+    noscript.id = 'facebook-pixel-noscript';
+    noscript.innerHTML = `<img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=${pixelId}&ev=PageView&noscript=1"/>`;
+    document.body.appendChild(noscript);
+  }
 }
 
