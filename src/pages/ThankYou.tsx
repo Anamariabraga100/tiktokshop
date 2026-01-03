@@ -29,21 +29,34 @@ const ThankYou = () => {
   // Isso garante que mesmo após refresh ou acesso direto, o status seja validado pelo backend
   useEffect(() => {
     const verifyPaymentStatus = async () => {
-      // Obter transactionId do state ou localStorage
+      // Obter transactionId (prioridade: state > sessionStorage > localStorage)
       let txId: string | null = null;
       
-      // Tentar obter do state (navegação direta)
+      // Primeiro: tentar do state (navegação com React Router)
       if (location.state?.transactionId) {
         txId = location.state.transactionId;
       } else {
-        // Tentar obter do localStorage (refresh da página)
-        const savedOrder = localStorage.getItem('lastOrder');
-        if (savedOrder) {
+        // Segundo: tentar do sessionStorage (fallback para window.location.href)
+        const sessionState = sessionStorage.getItem('thankYouState');
+        if (sessionState) {
           try {
-            const order = JSON.parse(savedOrder);
-            txId = order.umbrellaTransactionId || order.transactionId || null;
+            const parsed = JSON.parse(sessionState);
+            txId = parsed.transactionId || null;
           } catch (e) {
-            console.error('Erro ao recuperar transactionId:', e);
+            console.error('Erro ao recuperar transactionId do sessionStorage:', e);
+          }
+        }
+        
+        // Terceiro: tentar do localStorage (refresh da página)
+        if (!txId) {
+          const savedOrder = localStorage.getItem('lastOrder');
+          if (savedOrder) {
+            try {
+              const order = JSON.parse(savedOrder);
+              txId = order.umbrellaTransactionId || order.transactionId || null;
+            } catch (e) {
+              console.error('Erro ao recuperar transactionId:', e);
+            }
           }
         }
       }
@@ -112,18 +125,42 @@ const ThankYou = () => {
       const orderNum = Math.random().toString(36).substring(2, 10).toUpperCase();
       setOrderNumber(orderNum);
 
-      // Recuperar itens comprados do localStorage ou state
-      const savedOrder = localStorage.getItem('lastOrder');
-      if (savedOrder) {
-        try {
-          const order = JSON.parse(savedOrder);
-          setPurchasedItems(order.items || []);
-        } catch (e) {
-          console.error('Erro ao recuperar pedido:', e);
-          setPurchasedItems([]);
+      // Recuperar itens comprados (prioridade: state > sessionStorage > localStorage)
+      let itemsToSet: CartItem[] = [];
+      
+      if (location.state?.items) {
+        // Primeiro: tentar do state (navegação com React Router)
+        itemsToSet = location.state.items || [];
+      } else {
+        // Segundo: tentar do sessionStorage (fallback para window.location.href)
+        const sessionState = sessionStorage.getItem('thankYouState');
+        if (sessionState) {
+          try {
+            const parsed = JSON.parse(sessionState);
+            itemsToSet = parsed.items || [];
+            // Limpar sessionStorage após ler
+            sessionStorage.removeItem('thankYouState');
+          } catch (e) {
+            console.error('Erro ao recuperar state do sessionStorage:', e);
+          }
         }
-      } else if (location.state?.items) {
-        setPurchasedItems(location.state.items || []);
+        
+        // Terceiro: tentar do localStorage (refresh da página)
+        if (itemsToSet.length === 0) {
+          const savedOrder = localStorage.getItem('lastOrder');
+          if (savedOrder) {
+            try {
+              const order = JSON.parse(savedOrder);
+              itemsToSet = order.items || [];
+            } catch (e) {
+              console.error('Erro ao recuperar pedido:', e);
+            }
+          }
+        }
+      }
+      
+      if (itemsToSet.length > 0) {
+        setPurchasedItems(itemsToSet);
       } else {
         // Se não houver dados e status não for checking, redirecionar
         if (paymentStatus !== 'checking') {

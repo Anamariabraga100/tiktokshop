@@ -250,43 +250,49 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
             interval = null;
           }
           
-          // Verificar novamente antes de navegar
-          if (!isMounted) {
-            return;
-          }
-          
-          // Fechar modal
-          onClose();
-          
           // Marcar compra como concluída se for primeira compra
           if (isFirstPurchase()) {
             markPurchaseCompleted();
           }
           
-          // Mostrar toast de sucesso
+          // Preparar dados para navegação
+          const navigationState = {
+            items: items,
+            transaction: umbrellaTransaction,
+            paymentPending: false, // Pagamento confirmado pelo backend
+            transactionId: transactionId,
+          };
+          
+          // Salvar state no sessionStorage ANTES de navegar (garantir que dados estejam disponíveis)
+          try {
+            sessionStorage.setItem('thankYouState', JSON.stringify(navigationState));
+            // Também salvar flag no localStorage como backup
+            localStorage.setItem('paymentConfirmed', 'true');
+            localStorage.setItem('paymentConfirmedTransactionId', transactionId || '');
+            console.log('✅ State salvo no sessionStorage:', { transactionId, itemsCount: items.length });
+          } catch (storageError) {
+            console.error('⚠️ Erro ao salvar state no sessionStorage:', storageError);
+          }
+          
+          // Mostrar toast de sucesso (não bloquear navegação)
           toast.success('Pagamento confirmado! Redirecionando...', {
             id: 'payment-confirmed',
-            duration: 3000
+            duration: 2000
           });
           
-          // Redirecionar para página de agradecimento
+          // Navegar IMEDIATAMENTE usando window.location.replace (mais confiável, não permite voltar)
+          // Não chamar onPaymentComplete aqui pois fecha o drawer e pode interferir
+          // O carrinho será limpo na página ThankYou se necessário
+          console.log('🚀 Redirecionando para /thank-you...');
+          
+          // Marcar isMounted como false para evitar que o cleanup interfira
+          isMounted = false;
+          
+          // Navegar imediatamente - usar replace para não permitir voltar
+          // Usar setTimeout 0 para garantir que o código execute antes de qualquer cleanup
           setTimeout(() => {
-            if (isMounted) {
-              try {
-                navigate('/thank-you', {
-                  state: {
-                    items: items,
-                    transaction: umbrellaTransaction,
-                    paymentPending: false, // Pagamento confirmado pelo backend
-                    transactionId: transactionId,
-                  }
-                });
-              } catch (error) {
-                console.error('Erro ao navegar:', error);
-                window.location.href = '/thank-you';
-              }
-            }
-          }, 1000);
+            window.location.replace('/thank-you');
+          }, 0);
         } else if (data.status === 'EXPIRED') {
           console.warn('⏰ PIX expirado');
           toast.error('O PIX expirou. Gere um novo código.', {
