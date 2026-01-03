@@ -2,11 +2,6 @@
 // Rota: /api/create-pix-transaction
 // ESM PURO - package.json tem "type": "module"
 
-// ==========================================
-// 🎯 CAMADA 3: Criar PIX real com payload mínimo válido
-// URL: https://api-gateway.umbrellapag.com/api/user/transactions
-// ==========================================
-
 const BASE_URL = 'https://api-gateway.umbrellapag.com/api';
 const ENDPOINT = `${BASE_URL}/user/transactions`;
 
@@ -22,51 +17,111 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true });
     }
 
+    // Apenas POST
+    if (req.method !== 'POST') {
+      return res.status(405).json({
+        success: false,
+        error: 'Apenas requisições POST são permitidas'
+      });
+    }
+
     // Verificar API Key
     const API_KEY = process.env.UMBRELLAPAG_API_KEY;
     
     if (!API_KEY) {
       return res.status(500).json({
-        ok: false,
         success: false,
         error: 'UMBRELLAPAG_API_KEY não configurada'
       });
     }
 
-    // Payload válido conforme validação da API UmbrellaPag
-    // amount em centavos (49.90 = 4990)
-    const amountInCents = Math.round(Number(49.90).toFixed(2) * 100);
+    // Receber dados do frontend
+    const { customer, items, totalPrice, metadata } = req.body;
+
+    // Validar dados obrigatórios
+    if (!customer || !customer.name || !customer.cpf) {
+      return res.status(400).json({
+        success: false,
+        error: 'Dados do cliente incompletos. Nome e CPF são obrigatórios.'
+      });
+    }
+
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Carrinho vazio. Adicione itens ao carrinho.'
+      });
+    }
+
+    if (!totalPrice || totalPrice <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Valor inválido'
+      });
+    }
+
+    // Normalizar CPF (só números)
+    const normalizedCPF = customer.cpf.replace(/\D/g, '');
     
+    // Normalizar valor do PIX (CRÍTICO) - Evitar 4.473000000000001
+    const normalizedPrice = Number(Number(totalPrice).toFixed(2));
+    const amountInCents = Math.round(normalizedPrice * 100);
+
+    // Normalizar telefone (só números, mínimo 10 dígitos)
+    const normalizedPhone = customer.phone?.replace(/\D/g, '') || '11999999999';
+    const phone = normalizedPhone.length >= 10 ? normalizedPhone : '11999999999';
+
+    // Preparar customer para UmbrellaPag
+    const umbrellaCustomer = {
+      name: customer.name,
+      phone: phone,
+      email: customer.email || `cliente${normalizedCPF.substring(0, 6)}@exemplo.com`,
+      document: {
+        type: 'CPF',
+        number: normalizedCPF
+      }
+    };
+
+    // Preparar items para UmbrellaPag
+    const umbrellaItems = items
+      .filter(item => item.price > 0)
+      .map(item => {
+        const itemPrice = Number(Number(item.price).toFixed(2));
+        return {
+          title: item.name,
+          unitPrice: Math.round(itemPrice * 100), // em centavos
+          quantity: item.quantity || 1,
+          tangible: true
+        };
+      });
+
+    // Obter IP do cliente
+    const clientIP = req.headers['x-forwarded-for'] || 
+                    req.headers['x-real-ip'] || 
+                    req.connection?.remoteAddress || 
+                    '127.0.0.1';
+
+    // Montar payload para UmbrellaPag
     const payload = {
       amount: amountInCents, // em centavos
       currency: 'BRL',
       paymentMethod: 'PIX',
-      customer: {
-        name: 'Cliente Teste',
-        phone: '41999999999', // obrigatório, string
-        email: 'cliente@teste.com',
-        document: {
-          type: 'CPF',
-          number: '12345678909' // CPF só números
-        }
-      },
-      items: [
-        {
-          title: 'Produto Teste', // obrigatório: title (não name)
-          unitPrice: amountInCents, // obrigatório: unitPrice (não unitAmount)
-          quantity: 1,
-          tangible: true
-        }
-      ],
+      customer: umbrellaCustomer,
+      items: umbrellaItems,
       pix: {
-        expiresInDays: 1 // obrigatório: expiresInDays (não expiresIn)
-      }
+        expiresInDays: 1
+      },
+      // Postback URL para webhook (quando configurado)
+      postbackUrl: process.env.VITE_POSTBACK_URL || undefined,
+      // Metadata opcional
+      metadata: metadata ? JSON.stringify(metadata) : undefined
     };
 
-    console.log('🚀 Criando PIX real:', {
-      amount: payload.amount,
-      customer: payload.customer.name,
-      document: payload.customer.document.number.substring(0, 3) + '***'
+    console.log('🚀 Criando PIX:', {
+      amount: amountInCents,
+      customer: umbrellaCustomer.name,
+      itemsCount: umbrellaItems.length,
+      document: normalizedCPF.substring(0, 3) + '***'
     });
 
     // Chamar API UmbrellaPag
@@ -89,25 +144,50 @@ export default async function handler(req, res) {
       data = { raw: text.substring(0, 500) };
     }
 
-    console.log('📥 Resposta UmbrellaPag:', {
-      status: response.status,
-      hasData: !!data,
-      hasPixCode: !!(data?.pix?.qrCode || data?.qrCode || data?.copyPaste)
+    // Se não for sucesso, retornar erro
+    if (!response.ok) {
+      console.error('❌ Erro na API UmbrellaPag:', {
+        status: response.status,
+        data
+      });
+      
+      return res.status(response.status).json({
+        success: false,
+        status: response.status,
+        error: data?.message || data?.error || 'Erro ao criar transação PIX',
+        data: data
+      });
+    }
+
+    // Sucesso - padronizar resposta para o frontend
+    const transactionData = data?.data || data;
+    
+    console.log('✅ PIX criado com sucesso:', {
+      transactionId: transactionData?.transactionId || transactionData?.id,
+      status: transactionData?.status,
+      hasQrCode: !!(transactionData?.pix?.qrcode || transactionData?.pix?.qrCode)
     });
 
-    return res.status(response.status).json({
-      ok: response.ok,
-      success: response.ok,
-      status: response.status,
-      data
+    // Retornar apenas o que o frontend precisa
+    return res.status(200).json({
+      success: true,
+      status: 200,
+      transactionId: transactionData?.transactionId || transactionData?.id,
+      externalRef: transactionData?.externalRef,
+      status: transactionData?.status,
+      amount: transactionData?.amount,
+      pix: {
+        qrcode: transactionData?.pix?.qrcode || transactionData?.pix?.qrCode || transactionData?.qrCode,
+        copyPaste: transactionData?.pix?.copyPaste || transactionData?.copyPaste,
+        expiresAt: transactionData?.pix?.expirationDate || transactionData?.pix?.expiresAt
+      }
     });
 
   } catch (err) {
     console.error('❌ PIX error:', err);
     return res.status(500).json({
-      ok: false,
       success: false,
-      error: err.message
+      error: err.message || 'Erro desconhecido ao criar transação PIX'
     });
   }
 }
