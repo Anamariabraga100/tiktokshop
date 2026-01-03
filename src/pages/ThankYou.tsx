@@ -197,16 +197,21 @@ const ThankYou = () => {
 
   // Obter categorias dos produtos comprados
   const purchasedCategories = useMemo(() => {
-    if (!purchasedItems || purchasedItems.length === 0) {
+    try {
+      if (!purchasedItems || purchasedItems.length === 0) {
+        return [];
+      }
+      const categories = new Set<string>();
+      (purchasedItems || []).forEach(item => {
+        if (item && typeof item === 'object' && item.category) {
+          categories.add(item.category);
+        }
+      });
+      return Array.from(categories);
+    } catch (error) {
+      console.error('Erro ao calcular categorias:', error);
       return [];
     }
-    const categories = new Set<string>();
-    purchasedItems.forEach(item => {
-      if (item && item.category) {
-        categories.add(item.category);
-      }
-    });
-    return Array.from(categories);
   }, [purchasedItems]);
 
   // Produtos relacionados (mesma categoria dos comprados)
@@ -214,8 +219,10 @@ const ThankYou = () => {
   const relatedProducts = useMemo(() => {
     try {
       // Validar e filtrar apenas itens válidos com id
-      const validItems = (purchasedItems || []).filter(item => item && typeof item === 'object' && item.id);
-      const purchasedIds = new Set(validItems.map(item => item.id));
+      const validItems = Array.isArray(purchasedItems) 
+        ? purchasedItems.filter(item => item && typeof item === 'object' && item && 'id' in item)
+        : [];
+      const purchasedIds = new Set(validItems.map(item => item?.id).filter(Boolean));
       let related: Product[] = [];
     
     // Primeiro, tentar pegar produtos da mesma categoria
@@ -257,8 +264,10 @@ const ThankYou = () => {
     try {
       const videos: Array<{ product: Product; video: CreatorVideo }> = [];
       // Validar e filtrar apenas itens válidos com id
-      const validItems = (purchasedItems || []).filter(item => item && typeof item === 'object' && item.id);
-      const purchasedIds = new Set(validItems.map(item => item.id));
+      const validItems = Array.isArray(purchasedItems)
+        ? purchasedItems.filter(item => item && typeof item === 'object' && item && 'id' in item)
+        : [];
+      const purchasedIds = new Set(validItems.map(item => item?.id).filter(Boolean));
     
     // Primeiro, pegar produtos com mais vídeos (priorizar Kit Barbeador que tem 6 vídeos)
     // Ordenar por: quantidade de vídeos (desc), depois por soldCount (desc)
@@ -465,39 +474,22 @@ const ThankYou = () => {
   };
 
   const handleNextVideo = () => {
-    if (fullscreenVideoIndex === null || creatorVideos.length === 0) return;
+    if (!creatorVideos || fullscreenVideoIndex === null || creatorVideos.length === 0) return;
     const nextIndex = (fullscreenVideoIndex + 1) % creatorVideos.length;
     setFullscreenVideoIndex(nextIndex);
   };
 
   const handlePreviousVideo = () => {
-    if (fullscreenVideoIndex === null || creatorVideos.length === 0) return;
+    if (!creatorVideos || fullscreenVideoIndex === null || creatorVideos.length === 0) return;
     const prevIndex = fullscreenVideoIndex === 0 ? creatorVideos.length - 1 : fullscreenVideoIndex - 1;
     setFullscreenVideoIndex(prevIndex);
   };
 
-  const fullscreenVideo = fullscreenVideoIndex !== null && creatorVideos.length > 0 
+  const fullscreenVideo = fullscreenVideoIndex !== null && creatorVideos && creatorVideos.length > 0 
     ? creatorVideos[fullscreenVideoIndex] 
     : null;
 
-  // Se não houver itens comprados, mostrar loading ou redirecionar
-  // Mas se o pagamento foi confirmado, mostrar a página mesmo sem itens (eles podem estar carregando)
-  if (purchasedItems.length === 0 && !orderNumber && paymentStatus !== 'paid') {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-background to-muted/30 flex items-center justify-center">
-        <div className="text-center">
-          <motion.div
-            animate={{ rotate: 360 }}
-            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-            className="inline-flex items-center justify-center w-16 h-16 bg-primary/20 rounded-full mb-4"
-          >
-            <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full" />
-          </motion.div>
-          <p className="text-muted-foreground">Carregando informações do pedido...</p>
-        </div>
-      </div>
-    );
-  }
+  // SEMPRE renderizar a página, mesmo sem dados completos
 
   // ⚠️ IMPORTANTE: Mostrar estado de verificação do pagamento
   // Backend é a fonte da verdade - nunca confiar apenas no frontend
@@ -613,7 +605,7 @@ const ThankYou = () => {
   // Log para debug
   console.log('🔍 ThankYou Render:', {
     paymentStatus,
-    purchasedItemsCount: purchasedItems.length,
+    purchasedItemsCount: purchasedItems?.length || 0,
     orderNumber,
     relatedProductsCount: relatedProducts?.length || 0,
     creatorVideosCount: creatorVideos?.length || 0,
@@ -641,7 +633,7 @@ const ThankYou = () => {
         </motion.div>
 
         {/* Produtos Relacionados */}
-        {relatedProducts.length > 0 && (
+        {relatedProducts && relatedProducts.length > 0 && (
           <motion.section
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -657,7 +649,7 @@ const ThankYou = () => {
             
             <div className="overflow-x-auto scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0 md:overflow-visible">
               <div className="flex gap-3 md:grid md:grid-cols-2 lg:grid-cols-4 md:gap-4">
-                {relatedProducts.filter(p => p && p.id).map((product, index) => (
+                {(relatedProducts || []).filter(p => p && typeof p === 'object' && 'id' in p).map((product, index) => (
                   <motion.div
                     key={product.id}
                     initial={{ opacity: 0, scale: 0.9 }}
@@ -725,7 +717,7 @@ const ThankYou = () => {
         )}
 
         {/* Vídeos do Criador - Estilo TikTok */}
-        {creatorVideos.length > 0 && (
+        {creatorVideos && creatorVideos.length > 0 && (
           <motion.section
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -740,7 +732,7 @@ const ThankYou = () => {
             </p>
             
             <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
-              {creatorVideos.filter(v => v && v.product && v.video && v.video.id).map(({ product, video }, index) => (
+              {(creatorVideos || []).filter(v => v && v.product && v.video && typeof v.video === 'object' && 'id' in v.video).map(({ product, video }, index) => (
                 <motion.div
                   key={video.id}
                   initial={{ opacity: 0, x: 20 }}
