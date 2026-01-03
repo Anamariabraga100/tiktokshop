@@ -904,6 +904,32 @@ Preto, Branco, Vermelho, Azul`,
 • Tipo: Navalha descartável profissional
 • Uso: Barbearia e uso pessoal
 • Embalagem: Individual higienizada`,
+    reviews: [
+      {
+        id: 'r16',
+        userName: 'João Pedro',
+        userInitials: 'JP',
+        rating: 5,
+        text: 'Navalha excelente! Muito afiada e de qualidade profissional. Uso na barbearia e os clientes sempre elogiam o corte. Recomendo muito!',
+        date: '2024-02-06',
+      },
+      {
+        id: 'r17',
+        userName: 'Marcelo Silva',
+        userInitials: 'MS',
+        rating: 4,
+        text: 'Boa navalha, lâmina afiada e cabo confortável. Só achei que poderia vir com mais unidades no pacote, mas a qualidade é boa.',
+        date: '2024-02-03',
+      },
+      {
+        id: 'r18',
+        userName: 'Ricardo Costa',
+        userInitials: 'RC',
+        rating: 5,
+        text: 'Perfeita para uso profissional! Lâmina de alta qualidade, corte preciso e embalagem higienizada. Vale muito a pena!',
+        date: '2024-02-01',
+      },
+    ] as ProductReview[],
   },
   {
     id: '17',
@@ -935,6 +961,35 @@ Preto, Branco, Vermelho, Azul`,
 Blue - Fragrância fresca e masculina
 Pink - Fragrância doce e feminina
 Gold - Fragrância sofisticada e unissex`,
+    reviews: [
+      {
+        id: 'r19',
+        userName: 'Ana Paula',
+        userInitials: 'AP',
+        rating: 5,
+        itemVariant: 'Pink',
+        text: 'Adorei o kit! A fragrância é deliciosa e dura o dia todo. O creme hidrata muito bem e o body splash deixa um cheiro incrível. Super recomendo!',
+        date: '2024-02-07',
+      },
+      {
+        id: 'r20',
+        userName: 'Carlos Mendes',
+        userInitials: 'CM',
+        rating: 5,
+        itemVariant: 'Blue',
+        text: 'Kit perfeito! Fragrância masculina e fresca, creme hidratante de qualidade e o body splash dura bastante. Melhor custo-benefício!',
+        date: '2024-02-05',
+      },
+      {
+        id: 'r21',
+        userName: 'Fernanda Lima',
+        userInitials: 'FL',
+        rating: 4,
+        itemVariant: 'Gold',
+        text: 'Gostei muito! Fragrância sofisticada e unissex, produtos de boa qualidade. Só achei que o creme poderia ser um pouco mais cremoso.',
+        date: '2024-02-02',
+      },
+    ] as ProductReview[],
   },
   {
     id: '18',
@@ -964,6 +1019,32 @@ Gold - Fragrância sofisticada e unissex`,
 
 **Garantia:**
 1 ano`,
+    reviews: [
+      {
+        id: 'r22',
+        userName: 'Bruno Alves',
+        userInitials: 'BA',
+        rating: 5,
+        text: 'Barbeador excelente! Muito potente, bateria dura bastante e o corte é bem rente. Uso todo dia e tô muito satisfeito. Melhor que esperava pelo preço!',
+        date: '2024-02-08',
+      },
+      {
+        id: 'r23',
+        userName: 'Diego Santos',
+        userInitials: 'DS',
+        rating: 4,
+        text: 'Bom barbeador, funciona bem e é prático. Só achei que poderia ser um pouco mais silencioso, mas pelo preço vale muito a pena.',
+        date: '2024-02-05',
+      },
+      {
+        id: 'r24',
+        userName: 'Eduardo Rocha',
+        userInitials: 'ER',
+        rating: 5,
+        text: 'Top demais! Lâminas afiadas, bateria dura bastante e é resistente à água. Uso no banho e funciona perfeitamente. Recomendo muito!',
+        date: '2024-02-03',
+      },
+    ] as ProductReview[],
   },
   {
     id: '19',
@@ -995,6 +1076,32 @@ Gold - Fragrância sofisticada e unissex`,
 1 Pincel de barbear
 1 Espuma de barbear
 1 Loção pós-barba`,
+    reviews: [
+      {
+        id: 'r25',
+        userName: 'Gabriel Oliveira',
+        userInitials: 'GO',
+        rating: 5,
+        text: 'Kit completo e de qualidade! A navalha corta bem, o pincel é macio e a espuma faz bastante espuma. A loção pós-barba hidrata bem. Vale muito a pena!',
+        date: '2024-02-09',
+      },
+      {
+        id: 'r26',
+        userName: 'Henrique Lima',
+        userInitials: 'HL',
+        rating: 4,
+        text: 'Bom kit para começar. Produtos de qualidade, só achei que a espuma poderia ser um pouco mais cremosa, mas no geral gostei muito.',
+        date: '2024-02-06',
+      },
+      {
+        id: 'r27',
+        userName: 'Igor Martins',
+        userInitials: 'IM',
+        rating: 5,
+        text: 'Kit perfeito! Tudo que preciso para fazer a barba em casa. Qualidade profissional pelo preço. Já comprei mais um kit pra dar de presente!',
+        date: '2024-02-04',
+      },
+    ] as ProductReview[],
   },
   {
     id: '20',
@@ -1025,6 +1132,35 @@ Gold - Fragrância sofisticada e unissex`,
 
 **Cores Disponíveis:**
 Branco, Rosa, Azul`,
+    reviews: [
+      {
+        id: 'r28',
+        userName: 'Juliana Ferreira',
+        userInitials: 'JF',
+        rating: 5,
+        itemVariant: 'Rosa',
+        text: 'Escova elétrica incrível! Limpeza muito mais profunda que escova normal. Bateria dura bastante e o timer de 2 minutos é perfeito. Recomendo muito!',
+        date: '2024-02-10',
+      },
+      {
+        id: 'r29',
+        userName: 'Larissa Souza',
+        userInitials: 'LS',
+        rating: 5,
+        itemVariant: 'Branco',
+        text: 'Melhor escova que já tive! Dentes muito mais limpos, gengivas mais saudáveis. A vibração é suave mas eficiente. Vale cada centavo!',
+        date: '2024-02-07',
+      },
+      {
+        id: 'r30',
+        userName: 'Mariana Costa',
+        userInitials: 'MC',
+        rating: 4,
+        itemVariant: 'Azul',
+        text: 'Boa escova elétrica, limpeza eficiente e bateria dura bastante. Só achei que poderia ter mais opções de cabeças no kit, mas a qualidade é boa.',
+        date: '2024-02-05',
+      },
+    ] as ProductReview[],
   },
 
   // Ferramentas e Acessórios
@@ -1057,6 +1193,35 @@ Branco, Rosa, Azul`,
 
 **Cores Disponíveis:**
 Preto, Cinza, Azul Marinho`,
+    reviews: [
+      {
+        id: 'r31',
+        userName: 'Nicolas Almeida',
+        userInitials: 'NA',
+        rating: 5,
+        itemVariant: 'Preto',
+        text: 'Necessaire perfeita! Muito organizada, vários compartimentos e material resistente. Levo em todas as viagens. Recomendo muito!',
+        date: '2024-02-11',
+      },
+      {
+        id: 'r32',
+        userName: 'Otávio Rocha',
+        userInitials: 'OR',
+        rating: 4,
+        itemVariant: 'Cinza',
+        text: 'Boa nécessaire, bem organizada e de boa qualidade. Só achei que poderia ser um pouco maior, mas cabe tudo que preciso.',
+        date: '2024-02-08',
+      },
+      {
+        id: 'r39',
+        userName: 'Paulo Henrique',
+        userInitials: 'PH',
+        rating: 5,
+        itemVariant: 'Azul Marinho',
+        text: 'Excelente! Muito prática e organizada. Material de qualidade e resistente à água. Perfeita para viagens. Vale muito a pena!',
+        date: '2024-02-06',
+      },
+    ] as ProductReview[],
   },
   {
     id: '22',
@@ -1086,6 +1251,32 @@ Preto, Cinza, Azul Marinho`,
 
 **Garantia:**
 1 ano`,
+    reviews: [
+      {
+        id: 'r40',
+        userName: 'Renato Silva',
+        userInitials: 'RS',
+        rating: 5,
+        text: 'Parafusadeira muito potente! Bateria dura bastante e tem força de sobra para trabalhos pesados. Uso profissionalmente e recomendo muito!',
+        date: '2024-02-12',
+      },
+      {
+        id: 'r41',
+        userName: 'Sérgio Lima',
+        userInitials: 'SL',
+        rating: 4,
+        text: 'Boa parafusadeira, potente e prática. Só achei que poderia vir com mais uma bateria, mas a qualidade é excelente pelo preço.',
+        date: '2024-02-09',
+      },
+      {
+        id: 'r42',
+        userName: 'Thiago Costa',
+        userInitials: 'TC',
+        rating: 5,
+        text: 'Excelente! Muito potente, bateria dura bastante e é leve. Perfeita para trabalhos domésticos e profissionais. Vale muito a pena!',
+        date: '2024-02-07',
+      },
+    ] as ProductReview[],
   },
   {
     id: '23',
@@ -1161,6 +1352,40 @@ Reparos domésticos, montagem de móveis, manutenção de veículos, trabalhos p
         title: 'Review do kit 46 peças',
       },
     ] as CreatorVideo[],
+    reviews: [
+      {
+        id: 'r43',
+        userName: 'Vitor Hugo',
+        userInitials: 'VH',
+        rating: 5,
+        text: 'Kit completo demais! Tem todas as ferramentas que preciso. Qualidade excelente, maleta resistente e organização perfeita. Melhor custo-benefício que já vi!',
+        date: '2024-02-13',
+      },
+      {
+        id: 'r44',
+        userName: 'Wagner Santos',
+        userInitials: 'WS',
+        rating: 5,
+        text: 'Top! Kit muito completo, ferramentas de qualidade e a maleta é bem organizada. Uso pra tudo em casa e no trabalho. Recomendo muito!',
+        date: '2024-02-10',
+      },
+      {
+        id: 'r45',
+        userName: 'Yuri Alves',
+        userInitials: 'YA',
+        rating: 4,
+        text: 'Bom kit, ferramentas de qualidade e bem organizadas. Só achei que algumas peças poderiam ser um pouco maiores, mas no geral vale muito a pena.',
+        date: '2024-02-08',
+      },
+      {
+        id: 'r46',
+        userName: 'Zeca Oliveira',
+        userInitials: 'ZO',
+        rating: 5,
+        text: 'Kit perfeito! Tem tudo que preciso e mais um pouco. Ferramentas resistentes, maleta bem feita e preço excelente. Já mostrei pros amigos e vários compraram também!',
+        date: '2024-02-05',
+      },
+    ] as ProductReview[],
   },
   {
     id: '24',
@@ -1188,6 +1413,32 @@ Reparos domésticos, montagem de móveis, manutenção de veículos, trabalhos p
 
 **Aplicações:**
 Eletrônicos, relógios, brinquedos, aparelhos pequenos`,
+    reviews: [
+      {
+        id: 'r47',
+        userName: 'André Luiz',
+        userInitials: 'AL',
+        rating: 5,
+        text: 'Conjunto perfeito! Tem todas as chaves que preciso para trabalhar com eletrônicos. Bits de qualidade e estojo bem organizado. Recomendo muito!',
+        date: '2024-02-14',
+      },
+      {
+        id: 'r48',
+        userName: 'Bernardo Rocha',
+        userInitials: 'BR',
+        rating: 4,
+        text: 'Bom conjunto, bits de qualidade e bem organizados. Só achei que poderia ter mais algumas chaves torx, mas no geral atende bem minhas necessidades.',
+        date: '2024-02-11',
+      },
+      {
+        id: 'r49',
+        userName: 'Caio Mendes',
+        userInitials: 'CM',
+        rating: 5,
+        text: 'Excelente! Uso pra consertar celulares e notebooks. Tem todos os tamanhos que preciso e a qualidade dos bits é muito boa. Vale muito a pena!',
+        date: '2024-02-09',
+      },
+    ] as ProductReview[],
   },
   {
     id: '25',
@@ -1218,6 +1469,32 @@ Eletrônicos, relógios, brinquedos, aparelhos pequenos`,
 
 **Garantia:**
 2 anos`,
+    reviews: [
+      {
+        id: 'r50',
+        userName: 'Daniel Ferreira',
+        userInitials: 'DF',
+        rating: 5,
+        text: 'Parafusadeira profissional excelente! Muito potente, bateria dura bastante e vem com 2 baterias. Uso profissionalmente e superou todas as expectativas!',
+        date: '2024-02-15',
+      },
+      {
+        id: 'r51',
+        userName: 'Eduardo Lima',
+        userInitials: 'EL',
+        rating: 5,
+        text: 'Top demais! Muito potente, torque ajustável e a iluminação LED ajuda muito. Maleta profissional e qualidade excelente. Melhor investimento!',
+        date: '2024-02-12',
+      },
+      {
+        id: 'r52',
+        userName: 'Fabio Costa',
+        userInitials: 'FC',
+        rating: 4,
+        text: 'Boa parafusadeira profissional, potente e de qualidade. Só achei um pouco pesada, mas pelo torque e potência vale muito a pena.',
+        date: '2024-02-10',
+      },
+    ] as ProductReview[],
   },
   {
     id: '26',
@@ -1247,6 +1524,35 @@ Eletrônicos, relógios, brinquedos, aparelhos pequenos`,
 
 **Cores Disponíveis:**
 Preto, Transparente, Rosa, Azul, Verde`,
+    reviews: [
+      {
+        id: 'r53',
+        userName: 'Gabriela Silva',
+        userInitials: 'GS',
+        rating: 5,
+        itemVariant: 'Rosa',
+        text: 'Capa perfeita! Proteção excelente, encaixa perfeitamente e não amarela. Design bonito e material de qualidade. Recomendo muito!',
+        date: '2024-02-16',
+      },
+      {
+        id: 'r54',
+        userName: 'Helena Santos',
+        userInitials: 'HS',
+        rating: 5,
+        itemVariant: 'Transparente',
+        text: 'Adorei! Capa transparente que não amarela, proteção completa e encaixe perfeito. Já caiu algumas vezes e o celular está intacto. Vale muito a pena!',
+        date: '2024-02-13',
+      },
+      {
+        id: 'r55',
+        userName: 'Isabela Rocha',
+        userInitials: 'IR',
+        rating: 4,
+        itemVariant: 'Azul',
+        text: 'Boa capa, proteção adequada e material de qualidade. Só achei que poderia ser um pouco mais fina, mas protege bem mesmo assim.',
+        date: '2024-02-11',
+      },
+    ] as ProductReview[],
   },
   {
     id: '27',
