@@ -40,7 +40,7 @@ export default async function handler(req, res) {
     const payload = {
       amount: amountInCents, // em centavos
       currency: 'BRL',
-      paymentMethod: 'PIX',
+      paymentMethod: 'PIX'
       customer: {
         name: 'Cliente Teste',
         phone: '41999999999', // obrigatório, string
@@ -66,7 +66,7 @@ export default async function handler(req, res) {
     console.log('🚀 Criando PIX real:', {
       amount: payload.amount,
       customer: payload.customer.name,
-      document: payload.customer.document.substring(0, 3) + '***'
+      document: payload.customer.document.number.substring(0, 3) + '***'
     });
 
     // Chamar API UmbrellaPag
