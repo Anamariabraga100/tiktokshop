@@ -41,26 +41,25 @@ export default async function handler(req, res) {
       amount: amountInCents, // em centavos
       currency: 'BRL',
       paymentMethod: 'PIX',
-      installments: 1,
       customer: {
         name: 'Cliente Teste',
-        document: {
-          number: '12345678909', // CPF só números
-          type: 'CPF'
-        },
+        phone: '41999999999', // obrigatório, string
         email: 'cliente@teste.com',
-        phone: '11999999999' // obrigatório, string
+        document: {
+          type: 'CPF',
+          number: '12345678909' // CPF só números
+        }
       },
       items: [
         {
-          title: 'Produto Teste',
-          unitPrice: amountInCents, // em centavos
+          name: 'Produto Teste', // usar 'name' em vez de 'title'
+          unitAmount: amountInCents, // usar 'unitAmount' em vez de 'unitPrice'
           quantity: 1,
           tangible: true
         }
       ],
       pix: {
-        expiresInDays: 1
+        expiresIn: 86400 // 1 dia em segundos (mais compatível que expiresInDays)
       }
     };
 
