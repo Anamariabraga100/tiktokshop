@@ -170,12 +170,21 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
           setPixCode('');
           setUmbrellaTransaction(null);
           setIsProcessing(false); // Resetar aqui também
+          setTransactionCreated(false); // Resetar flag em caso de erro
         }
       };
-      
+
       createTransaction();
     }
-  }, [isOpen, customerData, items, finalPrice, isFirstPurchase, pixCode, isProcessing]);
+  }, [isOpen, customerData, items, finalPrice, isFirstPurchase, pixCode, isProcessing, transactionCreated]);
+
+  // Resetar flag quando modal fechar (proteção contra múltiplos cliques)
+  useEffect(() => {
+    if (!isOpen) {
+      setTransactionCreated(false);
+      setIsProcessing(false);
+    }
+  }, [isOpen]);
 
   const handleCopy = async () => {
     try {
