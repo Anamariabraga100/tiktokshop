@@ -52,14 +52,14 @@ export default async function handler(req, res) {
       },
       items: [
         {
-          name: 'Produto Teste', // usar 'name' em vez de 'title'
-          unitAmount: amountInCents, // usar 'unitAmount' em vez de 'unitPrice'
+          title: 'Produto Teste', // obrigatório: title (não name)
+          unitPrice: amountInCents, // obrigatório: unitPrice (não unitAmount)
           quantity: 1,
           tangible: true
         }
       ],
       pix: {
-        expiresIn: 86400 // 1 dia em segundos (mais compatível que expiresInDays)
+        expiresInDays: 1 // obrigatório: expiresInDays (não expiresIn)
       }
     };
 
