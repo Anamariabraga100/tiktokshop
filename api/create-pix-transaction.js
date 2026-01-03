@@ -40,7 +40,7 @@ export default async function handler(req, res) {
     const payload = {
       amount: amountInCents, // em centavos
       currency: 'BRL',
-      paymentMethod: 'PIX'
+      paymentMethod: 'PIX',
       customer: {
         name: 'Cliente Teste',
         phone: '41999999999', // obrigatório, string
