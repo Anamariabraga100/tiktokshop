@@ -189,6 +189,11 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
       item_price: item.price,
     }));
     
+    // Preparar dados completos do cliente para Facebook Pixel
+    const nameParts = customerData?.name?.trim().split(/\s+/) || [];
+    const firstName = nameParts[0] || '';
+    const lastName = nameParts.slice(1).join(' ') || '';
+    
     trackInitiateCheckout(
       finalPrice,
       regularItems.reduce((sum, item) => sum + item.quantity, 0),
@@ -196,9 +201,17 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
       {
         email: customerData?.email,
         phone: customerData?.phone,
-        firstName: customerData?.name?.split(' ')[0],
-        lastName: customerData?.name?.split(' ').slice(1).join(' '),
+        name: customerData?.name,
+        firstName: firstName,
+        lastName: lastName,
+        cpf: customerData?.cpf,
         externalId: customerData?.cpf?.replace(/\D/g, ''),
+        address: customerData?.address ? {
+          cidade: customerData.address.cidade,
+          estado: customerData.address.estado,
+          cep: customerData.address.cep,
+          country: 'br',
+        } : undefined,
       }
     );
     

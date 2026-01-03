@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle2, ShoppingCart, Play, Plus, X, ChevronRight, ChevronLeft, Heart, Share2 } from 'lucide-react';
+import { CheckCircle2, ShoppingCart, Play, Plus, X, ChevronRight, ChevronLeft, Heart, Share2, Bookmark } from 'lucide-react';
 import { products } from '@/data/products';
 import { Product, CartItem, CreatorVideo } from '@/types/product';
 import { Button } from '@/components/ui/button';
@@ -24,7 +24,7 @@ const ThankYou = () => {
   const [fullscreenVideoIndex, setFullscreenVideoIndex] = useState<number | null>(null);
   const fullscreenVideoRef = useRef<HTMLVideoElement | null>(null);
   const [variantModalProduct, setVariantModalProduct] = useState<Product | null>(null);
-  const [videoStates, setVideoStates] = useState<{ [key: string]: { isLiked: boolean; likesCount: number; sharesCount: number } }>({});
+  const [videoStates, setVideoStates] = useState<{ [key: string]: { isLiked: boolean; isSaved: boolean; likesCount: number; sharesCount: number } }>({});
   const [paymentStatus, setPaymentStatus] = useState<'checking' | 'paid' | 'pending' | 'expired' | 'error'>('checking');
   const [transactionId, setTransactionId] = useState<string | null>(null);
 
@@ -216,6 +216,11 @@ const ThankYou = () => {
       });
 
       // Rastrear evento Purchase no Facebook Pixel
+      // Preparar dados completos do cliente para Facebook Pixel
+      const nameParts = customerData?.name?.trim().split(/\s+/) || [];
+      const firstName = nameParts[0] || '';
+      const lastName = nameParts.slice(1).join(' ') || '';
+      
       trackPurchase(
         orderNumber,
         totalValue,
@@ -224,9 +229,17 @@ const ThankYou = () => {
         {
           email: customerData?.email,
           phone: customerData?.phone,
-          firstName: customerData?.name?.split(' ')[0],
-          lastName: customerData?.name?.split(' ').slice(1).join(' '),
+          name: customerData?.name,
+          firstName: firstName,
+          lastName: lastName,
+          cpf: customerData?.cpf,
           externalId: customerData?.cpf?.replace(/\D/g, ''),
+          address: customerData?.address ? {
+            cidade: customerData.address.cidade,
+            estado: customerData.address.estado,
+            cep: customerData.address.cep,
+            country: 'br',
+          } : undefined,
         }
       );
     } else {
@@ -429,21 +442,15 @@ const ThankYou = () => {
     }, 500);
   };
 
-  // Função para gerar likes determinístico baseado no ID do vídeo
+  // Função para gerar likes aleatório para cada vídeo
   const getLikesCount = useCallback((videoId: string, productLikesCount?: number) => {
     // Se o produto tem likesCount, usar ele
     if (productLikesCount) return productLikesCount;
-    // Caso contrário, gerar determinístico baseado no ID com melhor distribuição
-    let hash = 0;
-    for (let i = 0; i < videoId.length; i++) {
-      const char = videoId.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash; // Convert to 32bit integer
-    }
-    // Usar múltiplos fatores para garantir melhor distribuição
-    const seed = hash * 9301 + 49297; // Números primos para melhor distribuição
-    // Gerar número entre 10000 e 60000 com melhor distribuição
-    return Math.abs(seed % 50000) + 10000;
+    // Gerar número aleatório entre 3.000 e 80.000 para mais variedade
+    // Usar videoId como seed para manter consistência por vídeo, mas variar entre vídeos
+    const seed = videoId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    const random = (Math.sin(seed * 9301 + 49297) * 10000) % 1;
+    return Math.floor(Math.abs(random) * 77000) + 3000; // Entre 3k e 80k
   }, []);
 
   const handleVideoClick = (index: number) => {
@@ -457,6 +464,7 @@ const ThankYou = () => {
         ...prev,
         [video.video.id]: {
           isLiked: false,
+          isSaved: false,
           likesCount: initialLikes,
           sharesCount: Math.floor(Math.random() * 1000) + 200,
         }
@@ -479,7 +487,8 @@ const ThankYou = () => {
     const videoId = fullscreenVideo.video.id;
     const currentState = videoStates[videoId] || {
       isLiked: false,
-      likesCount: fullscreenVideo.product?.likesCount || Math.floor(Math.random() * 50000) + 10000,
+      isSaved: false,
+      likesCount: fullscreenVideo.product?.likesCount || getLikesCount(videoId, fullscreenVideo.product?.likesCount || 0),
       sharesCount: Math.floor(Math.random() * 1000) + 200,
     };
     
@@ -517,7 +526,8 @@ const ThankYou = () => {
     if (success) {
       const currentState = videoStates[videoId] || {
         isLiked: false,
-        likesCount: fullscreenVideo.product?.likesCount || Math.floor(Math.random() * 50000) + 10000,
+        isSaved: false,
+        likesCount: fullscreenVideo.product?.likesCount || getLikesCount(videoId, fullscreenVideo.product?.likesCount || 0),
         sharesCount: Math.floor(Math.random() * 1000) + 200,
       };
       
@@ -894,7 +904,7 @@ const ThankYou = () => {
                           ? (initialLikes / 1000).toFixed(1).replace('.', ',') + 'mil' 
                           : initialLikes.toString();
                         return (
-                          <div className="absolute right-2 top-2 flex flex-col items-center gap-1 z-10">
+                          <div className="absolute right-1 top-2 flex flex-col items-center gap-1 z-10">
                             <div className="flex flex-col items-center gap-0.5">
                               <Heart className="w-5 h-5 text-white drop-shadow-lg" />
                               <span className="text-white text-[10px] font-semibold drop-shadow-lg">
@@ -999,12 +1009,13 @@ const ThankYou = () => {
                       const videoId = fullscreenVideo.video.id;
                       const currentState = videoStates[videoId] || {
                         isLiked: false,
+                        isSaved: false,
                         likesCount: getLikesCount(videoId, fullscreenVideo.product?.likesCount || 0),
                         sharesCount: Math.floor(Math.random() * 1000) + 200,
                       };
                       
                       return (
-                      <div className="absolute right-4 md:right-8 bottom-20 md:bottom-32 flex flex-col gap-4 md:gap-6 z-10">
+                      <div className="absolute right-2 md:right-4 bottom-20 md:bottom-32 flex flex-col gap-4 md:gap-6 z-10">
                         {/* Like Button */}
                         <button
                           onClick={handleLike}
@@ -1017,6 +1028,30 @@ const ThankYou = () => {
                             {currentState.likesCount > 1000 
                               ? (currentState.likesCount / 1000).toFixed(1).replace('.', ',') + 'mil' 
                               : currentState.likesCount}
+                          </span>
+                        </button>
+
+                        {/* Save Button */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const newIsSaved = !currentState.isSaved;
+                            setVideoStates(prev => ({
+                              ...prev,
+                              [videoId]: {
+                                ...prev[videoId],
+                                isSaved: newIsSaved,
+                              }
+                            }));
+                            toast.success(newIsSaved ? 'Vídeo salvo!' : 'Vídeo removido dos salvos', { id: 'video-saved' });
+                          }}
+                          className="flex flex-col items-center gap-1"
+                        >
+                          <div className="w-12 h-12 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center">
+                            <Bookmark className={`w-6 h-6 ${currentState.isSaved ? 'fill-yellow-400 text-yellow-400' : 'text-white'}`} />
+                          </div>
+                          <span className="text-white text-xs font-medium">
+                            Salvar
                           </span>
                         </button>
 

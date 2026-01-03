@@ -10,11 +10,23 @@ interface UserData {
   phone?: string;
   firstName?: string;
   lastName?: string;
+  name?: string; // Nome completo (será dividido em firstName/lastName se necessário)
   externalId?: string;
+  cpf?: string; // CPF do cliente (será usado como external_id)
   clientIpAddress?: string;
   clientUserAgent?: string;
   fbc?: string; // Facebook Click ID
   fbp?: string; // Facebook Browser ID
+  address?: {
+    city?: string;
+    cidade?: string;
+    state?: string;
+    estado?: string;
+    zipCode?: string;
+    cep?: string;
+    zip?: string;
+    country?: string;
+  };
 }
 
 interface CustomData {
@@ -48,9 +60,23 @@ export async function trackFacebookEvent(
   eventData?: EventData
 ): Promise<boolean> {
   try {
-    // Obter dados do navegador
-    const clientUserAgent = navigator.userAgent;
+    // Obter dados do navegador (sempre disponíveis)
+    const clientUserAgent = navigator.userAgent || '';
     const sourceUrl = window.location.href;
+    
+    // Tentar obter IP do cliente (opcional, mas útil)
+    let clientIpAddress = userData?.clientIpAddress;
+    if (!clientIpAddress) {
+      // Tentar obter via API externa (pode falhar, mas tentamos)
+      try {
+        const ipResponse = await fetch('https://api.ipify.org?format=json');
+        const ipData = await ipResponse.json();
+        clientIpAddress = ipData.ip;
+      } catch (ipError) {
+        // Ignorar erro de IP, não é crítico
+        console.warn('⚠️ Não foi possível obter IP do cliente:', ipError);
+      }
+    }
     
     // Tentar obter fbp (Facebook Browser ID) do cookie
     const fbp = getCookie('_fbp') || '';
@@ -59,12 +85,24 @@ export async function trackFacebookEvent(
     const fbc = getCookie('_fbc') || getFbcFromUrl() || '';
 
     // Preparar dados do usuário
+    // IMPORTANTE: clientUserAgent é sempre enviado (obrigatório para Facebook)
     const userDataWithDefaults: UserData = {
       ...userData,
-      clientUserAgent,
-      fbp,
-      fbc,
+      clientUserAgent, // Sempre presente (obrigatório)
     };
+    
+    // Adicionar campos opcionais apenas se tiverem valores
+    if (clientIpAddress) {
+      userDataWithDefaults.clientIpAddress = clientIpAddress;
+    }
+    
+    if (fbp && fbp.trim()) {
+      userDataWithDefaults.fbp = fbp.trim();
+    }
+    
+    if (fbc && fbc.trim()) {
+      userDataWithDefaults.fbc = fbc.trim();
+    }
 
     // Enviar para o servidor
     const response = await fetch('/api/facebook-pixel', {
