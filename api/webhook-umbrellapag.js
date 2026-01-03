@@ -41,8 +41,9 @@ export default async function handler(req, res) {
     }
 
     const transactionId = webhookData.transactionId || webhookData.id;
-    const externalRef = webhookData.externalRef;
     const status = webhookData.status || webhookData.event;
+    // externalRef pode vir no metadata ou não existir
+    const externalRef = webhookData.externalRef || webhookData.metadata?.orderId;
 
     if (!transactionId) {
       console.error('❌ Webhook sem transactionId');
@@ -52,13 +53,8 @@ export default async function handler(req, res) {
       });
     }
 
-    if (!externalRef) {
-      console.error('❌ Webhook sem externalRef');
-      return res.status(400).json({
-        success: false,
-        error: 'externalRef é obrigatório'
-      });
-    }
+    // externalRef não é obrigatório (pode estar no metadata)
+    // Mas é útil para conciliação se disponível
 
     if (!status) {
       console.error('❌ Webhook sem status');
@@ -76,18 +72,18 @@ export default async function handler(req, res) {
     }
 
     // IDEMPOTÊNCIA: Verificar se já processamos este status
-    // Em produção, você deve verificar no banco de dados
-    // Por enquanto, apenas logamos
+    // Usar transactionId como chave principal (não externalRef)
     console.log('🔄 Processando webhook:', {
       transactionId,
-      externalRef,
+      externalRef: externalRef || 'não informado',
       status,
       timestamp: new Date().toISOString()
     });
 
     // TODO: Implementar verificação no banco de dados
+    // Buscar pedido por transactionId (chave principal)
     // Exemplo:
-    // const order = await getOrderByExternalRef(externalRef);
+    // const order = await getOrderByTransactionId(transactionId);
     // if (order && order.status === 'PAID' && status === 'PAID') {
     //   console.log('✅ Webhook ignorado - pedido já pago (idempotência)');
     //   return res.status(200).json({ ignored: true, reason: 'already_processed' });
@@ -95,8 +91,7 @@ export default async function handler(req, res) {
 
     // TODO: Atualizar status do pedido no banco
     // Exemplo:
-    // await updateOrderStatus(externalRef, status, {
-    //   transactionId,
+    // await updateOrderStatusByTransactionId(transactionId, status, {
     //   paidAt: status === 'PAID' ? new Date() : null,
     //   updatedAt: new Date()
     // });

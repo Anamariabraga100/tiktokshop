@@ -106,6 +106,8 @@ export default async function handler(req, res) {
                     '127.0.0.1';
 
     // Montar payload para UmbrellaPag
+    // IMPORTANTE: externalRef NÃO pode ser enviado no payload de criação
+    // O vínculo será feito via transactionId retornado pela API
     const postbackUrl = process.env.VITE_POSTBACK_URL || 
                         `https://${req.headers.host}/api/webhook-umbrellapag`;
     
@@ -118,11 +120,9 @@ export default async function handler(req, res) {
       pix: {
         expiresInDays: 1
       },
-      // ExternalRef = ID do pedido (obrigatório para conciliação)
-      externalRef: orderId,
       // Postback URL para webhook
       postbackUrl: postbackUrl,
-      // Metadata com orderId
+      // Metadata com orderId (para referência interna)
       metadata: JSON.stringify({
         orderId: orderId,
         ...metadata
@@ -134,7 +134,7 @@ export default async function handler(req, res) {
       customer: umbrellaCustomer.name,
       itemsCount: umbrellaItems.length,
       document: normalizedCPF.substring(0, 3) + '***',
-      externalRef: orderId
+      orderId: orderId // orderId interno (não enviado como externalRef)
     });
 
     // Chamar API UmbrellaPag
@@ -188,6 +188,18 @@ export default async function handler(req, res) {
       hasQrCode: !!qrCode
     });
 
+    // Extrair transactionId retornado pela UmbrellaPag
+    const transactionId = transactionData?.transactionId || transactionData?.id;
+    
+    // TODO: Salvar no banco de dados
+    // await saveOrderToDatabase({
+    //   orderId: orderId, // ID interno do pedido
+    //   transactionId: transactionId, // ID da transação UmbrellaPag
+    //   status: transactionData?.status || 'WAITING_PAYMENT',
+    //   amount: amountInCents,
+    //   qrCode: qrCode
+    // });
+
     // Retornar resposta compatível com frontend
     return res.status(200).json({
       success: true,
@@ -197,10 +209,9 @@ export default async function handler(req, res) {
       pixCode: qrCode,
       // Estrutura completa para compatibilidade com código existente
       data: {
-        id: transactionData?.transactionId || transactionData?.id,
-        transactionId: transactionData?.transactionId || transactionData?.id,
-        externalRef: transactionData?.externalRef || orderId,
-        orderId: orderId, // ID do pedido interno
+        id: transactionId,
+        transactionId: transactionId, // Usar transactionId como vínculo principal
+        orderId: orderId, // ID do pedido interno (guardar no nosso banco)
         status: transactionData?.status,
         amount: transactionData?.amount,
         qrCode: qrCode,
