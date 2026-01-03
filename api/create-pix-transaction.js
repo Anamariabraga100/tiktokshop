@@ -33,15 +33,34 @@ export default async function handler(req, res) {
       });
     }
 
-    // Payload mínimo válido para teste
+    // Payload válido conforme validação da API UmbrellaPag
+    // amount em centavos (49.90 = 4990)
+    const amountInCents = Math.round(Number(49.90).toFixed(2) * 100);
+    
     const payload = {
-      amount: Number(Number(49.90).toFixed(2)),
+      amount: amountInCents, // em centavos
+      currency: 'BRL',
       paymentMethod: 'PIX',
-      description: 'Pedido teste PIX',
+      installments: 1,
       customer: {
         name: 'Cliente Teste',
-        document: '12345678909', // CPF só números
-        email: 'cliente@teste.com'
+        document: {
+          number: '12345678909', // CPF só números
+          type: 'CPF'
+        },
+        email: 'cliente@teste.com',
+        phone: '11999999999' // obrigatório, string
+      },
+      items: [
+        {
+          title: 'Produto Teste',
+          unitPrice: amountInCents, // em centavos
+          quantity: 1,
+          tangible: true
+        }
+      ],
+      pix: {
+        expiresInDays: 1
       }
     };
 
