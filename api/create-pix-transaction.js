@@ -4,7 +4,12 @@
 
 // ==========================================
 // 🧪 CAMADA 2: Dry-run do UmbrellaPag (testar comunicação)
+// URL CORRETA: https://api-gateway.umbrellapag.com/api/user/transactions
 // ==========================================
+
+const BASE_URL = 'https://api-gateway.umbrellapag.com/api';
+const ENDPOINT = `${BASE_URL}/user/transactions`;
+
 export default async function handler(req, res) {
   try {
     // CORS
@@ -18,7 +23,6 @@ export default async function handler(req, res) {
     }
 
     // DRY-RUN: Testar comunicação com UmbrellaPag
-    // Node 18/20 já tem fetch global, não precisa importar
     const API_KEY = process.env.UMBRELLAPAG_API_KEY;
     
     if (!API_KEY) {
@@ -29,15 +33,15 @@ export default async function handler(req, res) {
       });
     }
 
-    // Tentar endpoint de transações com GET (ou endpoint de health se existir)
-    // Se não funcionar, vamos tentar POST mínimo depois
-    const response = await fetch('https://api.umbrellapag.com/api/user/transactions', {
-      method: 'GET',
+    // Testar conexão com POST e body mínimo
+    const response = await fetch(ENDPOINT, {
+      method: 'POST',
       headers: {
         'x-api-key': API_KEY,
         'User-Agent': 'UMBRELLAB2B/1.0',
         'Content-Type': 'application/json'
-      }
+      },
+      body: JSON.stringify({}) // body mínimo só para testar conexão
     });
 
     const text = await response.text();
@@ -49,15 +53,13 @@ export default async function handler(req, res) {
       data = { raw: text.substring(0, 500) };
     }
 
-    return res.status(200).json({
+    return res.status(response.status).json({
       ok: true,
       step: 'umbrella-dry-run',
       status: response.status,
       statusText: response.statusText,
       data,
-      headers: {
-        contentType: response.headers.get('content-type')
-      }
+      endpoint: ENDPOINT
     });
   } catch (err) {
     console.error('❌ Umbrella dry-run error:', err);
@@ -65,7 +67,7 @@ export default async function handler(req, res) {
       ok: false,
       step: 'umbrella-dry-run',
       error: err.message,
-      stack: err.stack
+      endpoint: ENDPOINT
     });
   }
 }
