@@ -188,13 +188,17 @@ const ThankYou = () => {
   // Obter categorias dos produtos comprados
   const purchasedCategories = useMemo(() => {
     try {
-      if (!purchasedItems || purchasedItems.length === 0) {
+      if (!Array.isArray(purchasedItems) || purchasedItems.length === 0) {
         return [];
       }
       const categories = new Set<string>();
-      (purchasedItems || []).forEach(item => {
-        if (item && typeof item === 'object' && item.category) {
-          categories.add(item.category);
+      purchasedItems.forEach(item => {
+        try {
+          if (item && typeof item === 'object' && 'category' in item && item.category) {
+            categories.add(String(item.category));
+          }
+        } catch (e) {
+          // Ignorar itens inválidos
         }
       });
       return Array.from(categories);
@@ -210,9 +214,24 @@ const ThankYou = () => {
     try {
       // Validar e filtrar apenas itens válidos com id
       const validItems = Array.isArray(purchasedItems) 
-        ? purchasedItems.filter(item => item && typeof item === 'object' && item && 'id' in item)
+        ? purchasedItems.filter(item => {
+            try {
+              return item && typeof item === 'object' && 'id' in item && item.id;
+            } catch {
+              return false;
+            }
+          })
         : [];
-      const purchasedIds = new Set(validItems.map(item => item?.id).filter(Boolean));
+      const purchasedIds = new Set<string>();
+      validItems.forEach(item => {
+        try {
+          if (item && 'id' in item && item.id) {
+            purchasedIds.add(String(item.id));
+          }
+        } catch {
+          // Ignorar
+        }
+      });
       let related: Product[] = [];
     
     // Primeiro, tentar pegar produtos da mesma categoria
@@ -601,11 +620,28 @@ const ThankYou = () => {
     creatorVideosCount: creatorVideos?.length || 0,
   });
 
-  return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-muted/30">
-      <div className="max-w-7xl mx-auto px-4 py-6 md:py-8">
-        {/* Confirmação de Pagamento - Verificação pelo Backend */}
-        {renderPaymentStatus()}
+  // Renderização básica que sempre funciona
+  // Garantir que renderPaymentStatus sempre retorne algo
+  const paymentStatusComponent = (() => {
+    try {
+      return renderPaymentStatus();
+    } catch (error) {
+      console.error('Erro ao renderizar status de pagamento:', error);
+      return (
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold mb-2">Obrigado pela sua compra!</h1>
+          <p className="text-muted-foreground">Seu pagamento foi confirmado.</p>
+        </div>
+      );
+    }
+  })();
+
+  try {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-background to-muted/30">
+        <div className="max-w-7xl mx-auto px-4 py-6 md:py-8">
+          {/* Confirmação de Pagamento - Verificação pelo Backend */}
+          {paymentStatusComponent}
 
         {/* Oportunidade Exclusiva */}
         <motion.div
@@ -722,9 +758,20 @@ const ThankYou = () => {
             </p>
             
             <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
-              {(creatorVideos || []).filter(v => v && v.product && v.video && typeof v.video === 'object' && 'id' in v.video).map(({ product, video }, index) => (
+              {(creatorVideos || []).filter(v => {
+                try {
+                  return v && v.product && v.video && typeof v.video === 'object' && 'id' in v.video && v.video.id;
+                } catch {
+                  return false;
+                }
+              }).map(({ product, video }, index) => {
+                try {
+                  const videoId = video?.id;
+                  if (!videoId) return null;
+                  
+                  return (
                 <motion.div
-                  key={video.id}
+                  key={videoId}
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 1.2 + index * 0.1 }}
@@ -779,22 +826,30 @@ const ThankYou = () => {
 
                     {/* Likes no lado direito - Estilo TikTok */}
                     {(() => {
-                      // Usar o mesmo número de likes que será usado no fullscreen
-                      const videoState = videoStates[video.video.id];
-                      const initialLikes = videoState?.likesCount || getLikesCount(video.video.id, product.likesCount);
-                      const formattedLikes = initialLikes > 1000 
-                        ? (initialLikes / 1000).toFixed(1).replace('.', ',') + 'mil' 
-                        : initialLikes.toString();
-                      return (
-                        <div className="absolute right-2 top-2 flex flex-col items-center gap-1 z-10">
-                          <div className="flex flex-col items-center gap-0.5">
-                            <Heart className="w-5 h-5 text-white drop-shadow-lg" />
-                            <span className="text-white text-[10px] font-semibold drop-shadow-lg">
-                              {formattedLikes}
-                            </span>
+                      try {
+                        // Usar o mesmo número de likes que será usado no fullscreen
+                        const videoId = video?.id || video?.video?.id;
+                        if (!videoId) return null;
+                        
+                        const videoState = videoStates[videoId];
+                        const initialLikes = videoState?.likesCount || getLikesCount(videoId, product?.likesCount || 0);
+                        const formattedLikes = initialLikes > 1000 
+                          ? (initialLikes / 1000).toFixed(1).replace('.', ',') + 'mil' 
+                          : initialLikes.toString();
+                        return (
+                          <div className="absolute right-2 top-2 flex flex-col items-center gap-1 z-10">
+                            <div className="flex flex-col items-center gap-0.5">
+                              <Heart className="w-5 h-5 text-white drop-shadow-lg" />
+                              <span className="text-white text-[10px] font-semibold drop-shadow-lg">
+                                {formattedLikes}
+                              </span>
+                            </div>
                           </div>
-                        </div>
-                      );
+                        );
+                      } catch (error) {
+                        console.error('Erro ao renderizar likes:', error);
+                        return null;
+                      }
                     })()}
                   </div>
 
@@ -829,7 +884,12 @@ const ThankYou = () => {
                     </p>
                   </div>
                 </motion.div>
-              ))}
+                  );
+                } catch (error) {
+                  console.error('Erro ao renderizar vídeo:', error);
+                  return null;
+                }
+              }).filter(Boolean)}
             </div>
           </motion.section>
         )}
@@ -877,13 +937,16 @@ const ThankYou = () => {
 
                   {/* Right Side Actions - Likes e Share */}
                   {(() => {
-                    const currentState = fullscreenVideo ? (videoStates[fullscreenVideo.video.id] || {
-                      isLiked: false,
-                      likesCount: getLikesCount(fullscreenVideo.video.id, fullscreenVideo.product.likesCount),
-                      sharesCount: Math.floor(Math.random() * 1000) + 200,
-                    }) : null;
-                    
-                    return currentState ? (
+                    try {
+                      if (!fullscreenVideo || !fullscreenVideo.video || !fullscreenVideo.video.id) return null;
+                      const videoId = fullscreenVideo.video.id;
+                      const currentState = videoStates[videoId] || {
+                        isLiked: false,
+                        likesCount: getLikesCount(videoId, fullscreenVideo.product?.likesCount || 0),
+                        sharesCount: Math.floor(Math.random() * 1000) + 200,
+                      };
+                      
+                      return (
                       <div className="absolute right-4 md:right-8 bottom-20 md:bottom-32 flex flex-col gap-4 md:gap-6 z-10">
                         {/* Like Button */}
                         <button
@@ -915,7 +978,11 @@ const ThankYou = () => {
                           </span>
                         </button>
                       </div>
-                    ) : null;
+                      );
+                    } catch (error) {
+                      console.error('Erro ao renderizar ações do vídeo:', error);
+                      return null;
+                    }
                   })()}
 
                   {/* Product Info Bottom */}
@@ -999,7 +1066,27 @@ const ThankYou = () => {
         />
       </div>
     </div>
-  );
+    );
+  } catch (error) {
+    // Fallback: renderizar página básica em caso de erro
+    console.error('❌ Erro ao renderizar ThankYou:', error);
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-background to-muted/30 flex items-center justify-center">
+        <div className="text-center max-w-md mx-auto px-4">
+          <h1 className="text-3xl font-bold mb-4">Obrigado pela sua compra!</h1>
+          <p className="text-muted-foreground mb-6">
+            Seu pagamento foi confirmado. Você receberá atualizações por email.
+          </p>
+          <Button onClick={() => navigate('/')} className="bg-primary text-primary-foreground">
+            Voltar para a loja
+          </Button>
+          <div className="mt-4 text-sm text-muted-foreground">
+            <p>Erro técnico: {error instanceof Error ? error.message : 'Erro desconhecido'}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 };
 
 export default ThankYou;
