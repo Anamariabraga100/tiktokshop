@@ -190,6 +190,13 @@ const ThankYou = () => {
 
   // Rastrear evento Purchase quando pagamento for confirmado
   useEffect(() => {
+    console.log('🔍 Verificando condições para Purchase:', {
+      paymentStatus,
+      purchasedItemsCount: purchasedItems.length,
+      orderNumber,
+      hasCustomerData: !!customerData
+    });
+
     if (paymentStatus === 'paid' && purchasedItems.length > 0 && orderNumber) {
       // Calcular valor total e itens
       const regularItems = purchasedItems.filter(item => !item.isGift);
@@ -200,6 +207,13 @@ const ThankYou = () => {
         quantity: item.quantity,
         item_price: item.price,
       }));
+
+      console.log('✅ Condições atendidas! Enviando evento Purchase:', {
+        orderNumber,
+        totalValue,
+        numItems,
+        contentsCount: contents.length
+      });
 
       // Rastrear evento Purchase no Facebook Pixel
       trackPurchase(
@@ -215,6 +229,16 @@ const ThankYou = () => {
           externalId: customerData?.cpf?.replace(/\D/g, ''),
         }
       );
+    } else {
+      if (paymentStatus !== 'paid') {
+        console.log('⏳ Aguardando paymentStatus = paid. Status atual:', paymentStatus);
+      }
+      if (purchasedItems.length === 0) {
+        console.log('⏳ Aguardando purchasedItems. Count atual:', purchasedItems.length);
+      }
+      if (!orderNumber) {
+        console.log('⏳ Aguardando orderNumber. Valor atual:', orderNumber);
+      }
     }
   }, [paymentStatus, purchasedItems, orderNumber, customerData]);
 

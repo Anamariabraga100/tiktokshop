@@ -89,11 +89,20 @@ export async function trackFacebookEvent(
     const result = await response.json();
 
     if (!response.ok || !result.success) {
-      console.error('Erro ao enviar evento para Facebook Pixel:', result);
+      console.error('❌ Erro ao enviar evento para Facebook Pixel:', {
+        eventName,
+        status: response.status,
+        error: result.error,
+        details: result
+      });
       return false;
     }
 
-    console.log('✅ Evento enviado para Facebook Pixel:', eventName, result.eventId);
+    console.log('✅✅✅ Evento enviado para Facebook Pixel com sucesso!', {
+      eventName,
+      eventId: result.eventId,
+      events_received: result.events_received
+    });
     return true;
 
   } catch (error) {
@@ -181,6 +190,14 @@ export function trackPurchase(
   contents: Array<{ id: string; quantity: number; item_price: number }>,
   userData?: UserData
 ): void {
+  console.log('📊 Enviando evento Purchase para Facebook Pixel:', {
+    orderId,
+    value,
+    numItems,
+    contentsCount: contents.length,
+    hasUserData: !!userData
+  });
+
   trackFacebookEvent('Purchase', {
     order_id: orderId,
     value,
