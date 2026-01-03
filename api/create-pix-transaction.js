@@ -2,7 +2,8 @@
 // Rota: /api/create-pix-transaction
 // Formato: Node.js Runtime
 
-module.exports = async (req, res) => {
+// Wrapper de segurança - Garantir que SEMPRE retornamos JSON, mesmo em erros críticos
+const handler = async (req, res) => {
   // TRY/CATCH GLOBAL - Garantir que SEMPRE retornamos JSON
   try {
     // CORS headers
@@ -285,5 +286,31 @@ module.exports = async (req, res) => {
       error: outerError?.message || 'Erro desconhecido ao processar requisição',
       data: null,
     });
+  }
+};
+
+// Exportar com tratamento de erro adicional
+module.exports = async (req, res) => {
+  try {
+    return await handler(req, res);
+  } catch (criticalError) {
+    // Se chegou aqui, é um erro crítico que nem o handler conseguiu capturar
+    console.error('❌ ERRO CRÍTICO NO MÓDULO:', criticalError);
+    
+    // Garantir que sempre retornamos JSON
+    if (!res.headersSent) {
+      try {
+        return res.status(500).json({
+          status: 500,
+          success: false,
+          message: 'Erro crítico no servidor',
+          error: criticalError?.message || 'Erro desconhecido',
+          data: null,
+        });
+      } catch (e) {
+        // Se nem isso funcionar, pelo menos tentar enviar algo
+        console.error('❌ Não foi possível enviar resposta JSON:', e);
+      }
+    }
   }
 };
