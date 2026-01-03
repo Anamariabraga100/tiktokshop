@@ -1,6 +1,10 @@
 // Vercel Serverless Function para criar transação PIX
 // Rota: /api/create-pix-transaction
 // ESM PURO - package.json tem "type": "module"
+//
+// ⚠️ IMPORTANTE: Salva transação no banco quando PIX é criado
+
+import { supabase } from './lib/supabase.js';
 
 const BASE_URL = 'https://api-gateway.umbrellapag.com/api';
 const ENDPOINT = `${BASE_URL}/user/transactions`;
@@ -39,7 +43,7 @@ export default async function handler(req, res) {
     const { customer, items, totalPrice, metadata } = req.body;
 
     // Validar dados obrigatórios
-    if (!customer || !customer.name || !customer.cpf) {
+    if (!customerInfo || !customerInfo.name || !customerInfo.cpf) {
       return res.status(400).json({
         success: false,
         error: 'Dados do cliente incompletos. Nome e CPF são obrigatórios.'
@@ -65,21 +69,21 @@ export default async function handler(req, res) {
     const orderId = metadata?.orderId || `ORDER-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
 
     // Normalizar CPF (só números)
-    const normalizedCPF = customer.cpf.replace(/\D/g, '');
+    const normalizedCPF = customerInfo.cpf.replace(/\D/g, '');
     
     // Normalizar valor do PIX (CRÍTICO) - Evitar 4.473000000000001
     const normalizedPrice = Number(Number(totalPrice).toFixed(2));
     const amountInCents = Math.round(normalizedPrice * 100);
 
     // Normalizar telefone (só números, mínimo 10 dígitos)
-    const normalizedPhone = customer.phone?.replace(/\D/g, '') || '11999999999';
+    const normalizedPhone = customerInfo.phone?.replace(/\D/g, '') || '11999999999';
     const phone = normalizedPhone.length >= 10 ? normalizedPhone : '11999999999';
 
     // Preparar customer para UmbrellaPag
     const umbrellaCustomer = {
-      name: customer.name,
+      name: customerInfo.name,
       phone: phone,
-      email: customer.email || `cliente${normalizedCPF.substring(0, 6)}@exemplo.com`,
+      email: customerInfo.email || `cliente${normalizedCPF.substring(0, 6)}@exemplo.com`,
       document: {
         type: 'CPF',
         number: normalizedCPF
@@ -191,14 +195,66 @@ export default async function handler(req, res) {
     // Extrair transactionId retornado pela UmbrellaPag
     const transactionId = transactionData?.transactionId || transactionData?.id;
     
-    // TODO: Salvar no banco de dados
-    // await saveOrderToDatabase({
-    //   orderId: orderId, // ID interno do pedido
-    //   transactionId: transactionId, // ID da transação UmbrellaPag
-    //   status: transactionData?.status || 'WAITING_PAYMENT',
-    //   amount: amountInCents,
-    //   qrCode: qrCode
-    // });
+    // ⚠️ CRÍTICO: Salvar transação no banco de dados (fonte da verdade)
+    // Status inicial = WAITING_PAYMENT
+    // Esse registro é o que o polling vai ler
+    if (transactionId && supabase) {
+      try {
+        // Normalizar CPF para buscar cliente
+        const normalizedCPFForDB = customerInfo.cpf.replace(/\D/g, '');
+        
+        // Preparar dados do pedido
+        const orderData = {
+          order_number: orderId, // ID interno do pedido
+          customer_cpf: normalizedCPFForDB,
+          items: items.map(item => ({
+            id: item.id,
+            name: item.name,
+            price: item.price,
+            quantity: item.quantity,
+            image: typeof item.image === 'string' ? item.image : undefined,
+            selectedSize: item.selectedSize,
+            selectedColor: item.selectedColor,
+          })),
+          total_price: normalizedPrice, // Usar preço normalizado (não finalPrice que não existe aqui)
+          payment_method: 'pix',
+          pix_code: qrCode,
+          status: 'aguardando_pagamento', // Status interno
+          umbrella_transaction_id: transactionId, // ID da transação UmbrellaPag
+          umbrella_status: transactionData?.status || 'WAITING_PAYMENT', // Status do gateway
+          umbrella_qr_code: qrCode,
+          umbrella_external_ref: orderId, // ID do pedido como externalRef
+        };
+
+        const { data: savedOrder, error: saveError } = await supabase
+          .from('orders')
+          .insert(orderData)
+          .select()
+          .single();
+
+        if (saveError) {
+          console.error('❌ Erro ao salvar pedido no banco:', saveError);
+          // Não falhar a transação, apenas logar o erro
+          // O pedido pode ser salvo depois pelo frontend
+        } else {
+          console.log('✅ Pedido salvo no banco:', {
+            orderNumber: savedOrder.order_number,
+            transactionId: savedOrder.umbrella_transaction_id,
+            status: savedOrder.umbrella_status
+          });
+        }
+      } catch (dbError) {
+        console.error('❌ Erro ao salvar pedido no banco:', dbError);
+        // Não falhar a transação, apenas logar o erro
+      }
+    } else {
+      if (!transactionId) {
+        console.warn('⚠️ TransactionId não disponível, não foi possível salvar no banco');
+      }
+      if (!supabase) {
+        console.warn('⚠️ Supabase não configurado, pedido não foi salvo no banco');
+      }
+    }
 
     // Retornar resposta compatível com frontend
     return res.status(200).json({
