@@ -124,8 +124,21 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
     const monthName = maxDate.toLocaleDateString('pt-BR', { month: 'long' });
     const month = monthName.charAt(0).toUpperCase() + monthName.slice(1);
     
-    // Calcular frete
-    const price = hasFreeShipping ? 0 : (10.80 + Math.random() * (18.90 - 10.80));
+    // Calcular frete (usar valor salvo se existir, senão calcular e salvar)
+    let price: number;
+    const savedShippingPrice = localStorage.getItem('currentShippingPrice');
+    
+    if (savedShippingPrice && hasAddress) {
+      // Usar valor salvo para manter consistência
+      price = parseFloat(savedShippingPrice);
+    } else {
+      // Calcular novo valor e salvar
+      price = hasFreeShipping ? 0 : (10.80 + Math.random() * (18.90 - 10.80));
+      if (hasAddress) {
+        localStorage.setItem('currentShippingPrice', price.toString());
+      }
+    }
+    
     const formatted = price.toFixed(2).replace('.', ',');
     
     return {

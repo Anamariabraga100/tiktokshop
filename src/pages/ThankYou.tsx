@@ -372,11 +372,12 @@ const ThankYou = () => {
   }, []);
 
   const handleVideoClick = (index: number) => {
+    if (index < 0 || index >= creatorVideos.length) return;
     setFullscreenVideoIndex(index);
     // Inicializar estado do vídeo se não existir
     const video = creatorVideos[index];
-    if (video && !videoStates[video.video.id]) {
-      const initialLikes = getLikesCount(video.video.id, video.product.likesCount);
+    if (video && video.video && video.video.id && !videoStates[video.video.id]) {
+      const initialLikes = getLikesCount(video.video.id, video.product?.likesCount);
       setVideoStates(prev => ({
         ...prev,
         [video.video.id]: {
@@ -398,35 +399,37 @@ const ThankYou = () => {
 
   const handleLike = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!fullscreenVideo) return;
+    if (!fullscreenVideo || !fullscreenVideo.video || !fullscreenVideo.video.id) return;
     
-    const currentState = videoStates[fullscreenVideo.video.id] || {
+    const videoId = fullscreenVideo.video.id;
+    const currentState = videoStates[videoId] || {
       isLiked: false,
-      likesCount: fullscreenVideo.product.likesCount || Math.floor(Math.random() * 50000) + 10000,
+      likesCount: fullscreenVideo.product?.likesCount || Math.floor(Math.random() * 50000) + 10000,
       sharesCount: Math.floor(Math.random() * 1000) + 200,
     };
     
     const newIsLiked = !currentState.isLiked;
     setVideoStates(prev => ({
       ...prev,
-      [fullscreenVideo.video.id]: {
-        ...prev[fullscreenVideo.video.id],
+      [videoId]: {
+        ...prev[videoId],
         isLiked: newIsLiked,
         likesCount: newIsLiked 
-          ? (prev[fullscreenVideo.video.id]?.likesCount || currentState.likesCount) + 1 
-          : Math.max(0, (prev[fullscreenVideo.video.id]?.likesCount || currentState.likesCount) - 1),
-        sharesCount: prev[fullscreenVideo.video.id]?.sharesCount || currentState.sharesCount,
+          ? (prev[videoId]?.likesCount || currentState.likesCount) + 1 
+          : Math.max(0, (prev[videoId]?.likesCount || currentState.likesCount) - 1),
+        sharesCount: prev[videoId]?.sharesCount || currentState.sharesCount,
       }
     }));
   };
 
   const handleShare = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!fullscreenVideo) return;
+    if (!fullscreenVideo || !fullscreenVideo.video || !fullscreenVideo.video.id || !fullscreenVideo.product) return;
     
+    const videoId = fullscreenVideo.video.id;
     const shareText = fullscreenVideo.video.title 
       ? `Confira este vídeo: ${fullscreenVideo.video.title}`
-      : `Confira este vídeo de ${fullscreenVideo.video.creatorName}`;
+      : `Confira este vídeo de ${fullscreenVideo.video.creatorName || 'criador'}`;
     
     const shareUrl = fullscreenVideo.product.url || `${window.location.origin}/produto/${fullscreenVideo.product.id}`;
     
@@ -437,19 +440,19 @@ const ThankYou = () => {
     );
     
     if (success) {
-      const currentState = videoStates[fullscreenVideo.video.id] || {
+      const currentState = videoStates[videoId] || {
         isLiked: false,
-        likesCount: fullscreenVideo.product.likesCount || Math.floor(Math.random() * 50000) + 10000,
+        likesCount: fullscreenVideo.product?.likesCount || Math.floor(Math.random() * 50000) + 10000,
         sharesCount: Math.floor(Math.random() * 1000) + 200,
       };
       
       setVideoStates(prev => ({
         ...prev,
-        [fullscreenVideo.video.id]: {
-          ...prev[fullscreenVideo.video.id],
-          sharesCount: (prev[fullscreenVideo.video.id]?.sharesCount || currentState.sharesCount) + 1,
-          likesCount: prev[fullscreenVideo.video.id]?.likesCount || currentState.likesCount,
-          isLiked: prev[fullscreenVideo.video.id]?.isLiked || false,
+        [videoId]: {
+          ...prev[videoId],
+          sharesCount: (prev[videoId]?.sharesCount || currentState.sharesCount) + 1,
+          likesCount: prev[videoId]?.likesCount || currentState.likesCount,
+          isLiked: prev[videoId]?.isLiked || false,
         }
       }));
       
@@ -607,30 +610,20 @@ const ThankYou = () => {
     );
   };
 
-  // TESTE: Renderização simplificada para debug
+  // Log para debug
   console.log('🔍 ThankYou Render:', {
     paymentStatus,
     purchasedItemsCount: purchasedItems.length,
     orderNumber,
-    hasLocationState: !!location.state,
-    hasSessionStorage: !!sessionStorage.getItem('thankYouState'),
-    hasLocalStorage: !!localStorage.getItem('lastOrder'),
     relatedProductsCount: relatedProducts?.length || 0,
     creatorVideosCount: creatorVideos?.length || 0,
   });
 
-  // TESTE: Renderização mínima que sempre aparece
-  try {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-background to-muted/30">
-        <div className="max-w-7xl mx-auto px-4 py-6 md:py-8">
-          {/* TESTE: Banner de debug */}
-          <div className="bg-yellow-100 border border-yellow-400 text-yellow-800 px-4 py-3 rounded mb-4">
-            <strong>DEBUG:</strong> Status: {paymentStatus} | Itens: {purchasedItems.length} | Pedido: {orderNumber || 'N/A'}
-          </div>
-          
-          {/* Confirmação de Pagamento - Verificação pelo Backend */}
-          {renderPaymentStatus()}
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-background to-muted/30">
+      <div className="max-w-7xl mx-auto px-4 py-6 md:py-8">
+        {/* Confirmação de Pagamento - Verificação pelo Backend */}
+        {renderPaymentStatus()}
 
         {/* Oportunidade Exclusiva */}
         <motion.div
@@ -664,7 +657,7 @@ const ThankYou = () => {
             
             <div className="overflow-x-auto scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0 md:overflow-visible">
               <div className="flex gap-3 md:grid md:grid-cols-2 lg:grid-cols-4 md:gap-4">
-                {relatedProducts.map((product, index) => (
+                {relatedProducts.filter(p => p && p.id).map((product, index) => (
                   <motion.div
                     key={product.id}
                     initial={{ opacity: 0, scale: 0.9 }}
@@ -747,7 +740,7 @@ const ThankYou = () => {
             </p>
             
             <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
-              {creatorVideos.map(({ product, video }, index) => (
+              {creatorVideos.filter(v => v && v.product && v.video && v.video.id).map(({ product, video }, index) => (
                 <motion.div
                   key={video.id}
                   initial={{ opacity: 0, x: 20 }}
@@ -1024,30 +1017,7 @@ const ThankYou = () => {
         />
       </div>
     </div>
-    );
-  } catch (error) {
-    // TESTE: Capturar qualquer erro de renderização
-    console.error('❌ Erro ao renderizar ThankYou:', error);
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-background to-muted/30 flex items-center justify-center">
-        <div className="text-center max-w-md mx-auto px-4">
-          <div className="bg-red-100 border border-red-400 text-red-800 px-4 py-3 rounded mb-4">
-            <strong>ERRO:</strong> {error instanceof Error ? error.message : 'Erro desconhecido'}
-          </div>
-          <h1 className="text-2xl font-bold mb-2">Obrigado pela sua compra!</h1>
-          <p className="text-muted-foreground mb-4">
-            Seu pagamento foi confirmado. Você receberá atualizações por email.
-          </p>
-          <button
-            onClick={() => navigate('/')}
-            className="bg-primary text-primary-foreground px-6 py-2 rounded-full font-semibold hover:opacity-90"
-          >
-            Voltar para a loja
-          </button>
-        </div>
-      </div>
-    );
-  }
+  );
 };
 
 export default ThankYou;

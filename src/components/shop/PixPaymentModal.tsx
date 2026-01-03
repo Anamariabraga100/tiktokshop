@@ -53,13 +53,20 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
   const pixDiscount = priceAfterCoupon * 0.1;
   const priceAfterPix = priceAfterCoupon - pixDiscount;
   
-  // Calcular frete (mesma lógica do CartDrawer)
+  // Calcular frete (usar o mesmo valor do CartDrawer para manter consistência)
   const shippingPrice = useMemo(() => {
     if (!hasAddress) {
       return 0;
     }
-    // Calcular frete (mesmo cálculo do CartDrawer)
-    return hasFreeShipping ? 0 : (10.80 + Math.random() * (18.90 - 10.80));
+    // Usar o valor salvo do CartDrawer (garante que seja o mesmo valor mostrado)
+    const savedShippingPrice = localStorage.getItem('currentShippingPrice');
+    if (savedShippingPrice) {
+      return parseFloat(savedShippingPrice);
+    }
+    // Se não tiver salvo, calcular (fallback)
+    const calculated = hasFreeShipping ? 0 : (10.80 + Math.random() * (18.90 - 10.80));
+    localStorage.setItem('currentShippingPrice', calculated.toString());
+    return calculated;
   }, [hasAddress, hasFreeShipping]);
   
   // Valor final incluindo frete (IMPORTANTE: deve incluir frete como no CartDrawer)
