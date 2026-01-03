@@ -231,3 +231,65 @@ export const getOrdersFromSupabase = async (cpf: string): Promise<OrderRow[]> =>
   }
 };
 
+/**
+ * Busca um pedido pelo transactionId do UmbrellaPag
+ */
+export const getOrderByTransactionId = async (transactionId: string): Promise<OrderRow | null> => {
+  try {
+    if (!supabaseUrl || !supabaseAnonKey) {
+      return null;
+    }
+
+    const { data, error } = await supabase
+      .from('orders')
+      .select('*')
+      .eq('umbrella_transaction_id', transactionId)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        // Pedido não encontrado
+        return null;
+      }
+      console.error('Erro ao buscar pedido por transactionId no Supabase:', error);
+      return null;
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Erro ao buscar pedido por transactionId no Supabase:', error);
+    return null;
+  }
+};
+
+/**
+ * Atualiza um pedido pelo transactionId do UmbrellaPag
+ */
+export const updateOrderByTransactionId = async (
+  transactionId: string,
+  updates: Partial<OrderRow>
+): Promise<OrderRow | null> => {
+  try {
+    if (!supabaseUrl || !supabaseAnonKey) {
+      return null;
+    }
+
+    const { data, error } = await supabase
+      .from('orders')
+      .update(updates)
+      .eq('umbrella_transaction_id', transactionId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Erro ao atualizar pedido por transactionId no Supabase:', error);
+      return null;
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Erro ao atualizar pedido por transactionId no Supabase:', error);
+    return null;
+  }
+};
+

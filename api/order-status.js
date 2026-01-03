@@ -1,6 +1,11 @@
 // Endpoint para consultar status de um pedido
 // Rota: /api/order-status
 // ESM PURO - package.json tem "type": "module"
+// 
+// ⚠️ IMPORTANTE: Banco de dados é a fonte da verdade
+// Consulta banco primeiro, só usa UmbrellaPag como fallback
+
+import { getOrderByTransactionId } from './lib/supabase.js';
 
 const BASE_URL = 'https://api-gateway.umbrellapag.com/api';
 
@@ -24,16 +29,6 @@ export default async function handler(req, res) {
       });
     }
 
-    // Verificar API Key
-    const API_KEY = process.env.UMBRELLAPAG_API_KEY;
-    
-    if (!API_KEY) {
-      return res.status(500).json({
-        success: false,
-        error: 'UMBRELLAPAG_API_KEY não configurada'
-      });
-    }
-
     // Obter transactionId ou externalRef da query
     const { transactionId, externalRef } = req.query;
 
@@ -44,14 +39,65 @@ export default async function handler(req, res) {
       });
     }
 
-    // Consultar status na UmbrellaPag
-    // Se tiver transactionId, usar endpoint de transação específica
-    // Se tiver externalRef, pode precisar listar e filtrar
+    // ⚠️ PRIORIDADE 1: Consultar banco de dados (fonte da verdade)
+    if (transactionId) {
+      console.log('🔍 Consultando banco de dados para transactionId:', transactionId);
+      const order = await getOrderByTransactionId(transactionId);
+
+      if (order) {
+        console.log('✅ Pedido encontrado no banco:', {
+          orderNumber: order.order_number,
+          umbrellaStatus: order.umbrella_status,
+          status: order.status
+        });
+
+        // Usar status do banco (atualizado pelo webhook)
+        // Mapear status do banco para formato esperado pelo frontend
+        let finalStatus = order.umbrella_status || order.status;
+        
+        // Normalizar status
+        if (finalStatus === 'PAID' || finalStatus === 'paid' || finalStatus === 'pago') {
+          finalStatus = 'PAID';
+        } else if (finalStatus === 'WAITING_PAYMENT' || finalStatus === 'waiting_payment' || finalStatus === 'aguardando_pagamento') {
+          finalStatus = 'WAITING_PAYMENT';
+        } else if (finalStatus === 'EXPIRED' || finalStatus === 'expired' || finalStatus === 'expirado') {
+          finalStatus = 'EXPIRED';
+        }
+
+        return res.status(200).json({
+          success: true,
+          status: 200,
+          transactionId: order.umbrella_transaction_id,
+          externalRef: order.umbrella_external_ref,
+          orderNumber: order.order_number,
+          status: finalStatus, // Status do banco (fonte da verdade)
+          amount: order.total_price,
+          paidAt: order.umbrella_paid_at,
+          source: 'database', // Indica que veio do banco
+          pix: {
+            qrCode: order.umbrella_qr_code || order.pix_code,
+          }
+        });
+      }
+
+      console.log('⚠️ Pedido não encontrado no banco, consultando UmbrellaPag como fallback');
+    }
+
+    // ⚠️ FALLBACK: Se não encontrou no banco, consultar UmbrellaPag
+    // Isso pode acontecer se o pedido ainda não foi salvo ou se o banco não está configurado
+    const API_KEY = process.env.UMBRELLAPAG_API_KEY;
+    
+    if (!API_KEY) {
+      return res.status(500).json({
+        success: false,
+        error: 'UMBRELLAPAG_API_KEY não configurada e pedido não encontrado no banco'
+      });
+    }
+
     let endpoint;
     if (transactionId) {
       endpoint = `${BASE_URL}/user/transactions/${transactionId}`;
     } else {
-      // Listar transações e filtrar por externalRef
       endpoint = `${BASE_URL}/user/transactions?externalRef=${externalRef}`;
     }
 
@@ -105,6 +151,7 @@ export default async function handler(req, res) {
       paidAt: transactionData?.paidAt,
       isExpired: isExpired,
       expirationDate: expirationDate,
+      source: 'gateway', // Indica que veio do gateway (fallback)
       pix: {
         qrCode: transactionData?.pix?.qrcode || transactionData?.pix?.qrCode || transactionData?.qrCode,
         expirationDate: expirationDate

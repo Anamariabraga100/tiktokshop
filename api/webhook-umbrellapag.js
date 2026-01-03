@@ -1,6 +1,10 @@
 // Webhook para receber notificações de pagamento da UmbrellaPag
 // Rota: /api/webhook-umbrellapag
 // ESM PURO - package.json tem "type": "module"
+//
+// ⚠️ IMPORTANTE: Este webhook atualiza o banco de dados (fonte da verdade)
+
+import { getOrderByTransactionId, updateOrderByTransactionId } from './lib/supabase.js';
 
 export default async function handler(req, res) {
   try {
@@ -80,21 +84,62 @@ export default async function handler(req, res) {
       timestamp: new Date().toISOString()
     });
 
-    // TODO: Implementar verificação no banco de dados
-    // Buscar pedido por transactionId (chave principal)
-    // Exemplo:
-    // const order = await getOrderByTransactionId(transactionId);
-    // if (order && order.status === 'PAID' && status === 'PAID') {
-    //   console.log('✅ Webhook ignorado - pedido já pago (idempotência)');
-    //   return res.status(200).json({ ignored: true, reason: 'already_processed' });
-    // }
+    // ⚠️ CRÍTICO: Buscar pedido no banco de dados
+    const order = await getOrderByTransactionId(transactionId);
 
-    // TODO: Atualizar status do pedido no banco
-    // Exemplo:
-    // await updateOrderStatusByTransactionId(transactionId, status, {
-    //   paidAt: status === 'PAID' ? new Date() : null,
-    //   updatedAt: new Date()
-    // });
+    if (!order) {
+      console.warn(`⚠️ Pedido não encontrado no banco para transactionId: ${transactionId}`);
+      // Não falhar o webhook, apenas avisar
+      // O pedido pode não ter sido salvo ainda ou o banco não está configurado
+      return res.status(200).json({
+        success: true,
+        received: true,
+        transactionId,
+        status,
+        warning: 'Pedido não encontrado no banco de dados'
+      });
+    }
+
+    // IDEMPOTÊNCIA: Verificar se já está no status atual
+    const currentStatus = order.umbrella_status || order.status;
+    if (currentStatus === status && status === 'PAID') {
+      console.log('✅ Webhook ignorado - pedido já está PAID (idempotência)');
+      return res.status(200).json({
+        success: true,
+        received: true,
+        transactionId,
+        status,
+        ignored: true,
+        reason: 'already_processed'
+      });
+    }
+
+    // ⚠️ CRÍTICO: Atualizar status no banco de dados (fonte da verdade)
+    const updateData = {
+      umbrella_status: status,
+      status: status === 'PAID' ? 'pago' : 
+              status === 'EXPIRED' ? 'expirado' : 
+              status === 'WAITING_PAYMENT' ? 'aguardando_pagamento' : 
+              order.status, // Manter status atual se não for um dos conhecidos
+    };
+
+    // Se foi pago, atualizar data de pagamento
+    if (status === 'PAID') {
+      updateData.umbrella_paid_at = new Date().toISOString();
+      updateData.status = 'pago'; // Status interno também
+    }
+
+    const updatedOrder = await updateOrderByTransactionId(transactionId, updateData);
+
+    if (updatedOrder) {
+      console.log('✅ Pedido atualizado no banco:', {
+        orderNumber: updatedOrder.order_number,
+        oldStatus: currentStatus,
+        newStatus: status
+      });
+    } else {
+      console.error('❌ Erro ao atualizar pedido no banco');
+    }
 
     // Log estratégico (sem dados sensíveis)
     console.log('✅ Webhook processado:', {
