@@ -983,12 +983,19 @@ const ThankYou = () => {
                   <X className="w-5 h-5" />
                 </button>
 
-                <div className="relative flex-1 overflow-hidden">
+                <div className="relative flex-1 overflow-hidden flex items-center justify-center bg-black">
                   <video
                     key={fullscreenVideoIndex}
                     ref={fullscreenVideoRef}
                     src={fullscreenVideo.video.videoUrl}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-contain"
+                    style={{
+                      aspectRatio: '9/16',
+                      maxWidth: '100%',
+                      maxHeight: '100vh',
+                      width: 'auto',
+                      height: 'auto'
+                    }}
                     loop
                     playsInline
                     autoPlay
@@ -1017,7 +1024,7 @@ const ThankYou = () => {
                       };
                       
                       return (
-                      <div className="absolute right-2 md:right-4 bottom-20 md:bottom-32 flex flex-col gap-4 md:gap-6 z-10">
+                      <div className="absolute right-2 md:right-8 bottom-20 md:bottom-32 flex flex-col gap-4 md:gap-6 z-10">
                         {/* Like Button */}
                         <button
                           onClick={handleLike}

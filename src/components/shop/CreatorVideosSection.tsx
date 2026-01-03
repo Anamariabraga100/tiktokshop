@@ -532,12 +532,19 @@ export const CreatorVideosSection = ({ videos, product, onProductClick }: Creato
               </button>
 
               {/* Video Container - Full Screen */}
-              <div className="relative flex-1 overflow-hidden">
+              <div className="relative flex-1 overflow-hidden flex items-center justify-center bg-black">
                 <video
                   key={fullscreenVideoIndex}
                   ref={fullscreenVideoRef}
                   src={fullscreenVideo.videoUrl}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-contain"
+                  style={{
+                    aspectRatio: '9/16',
+                    maxWidth: '100%',
+                    maxHeight: '100vh',
+                    width: 'auto',
+                    height: 'auto'
+                  }}
                   loop
                   playsInline
                   preload="auto"
