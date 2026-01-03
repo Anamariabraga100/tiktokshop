@@ -10,6 +10,7 @@ import { ProductReviews } from './ProductReviews';
 import { CreatorVideosSection } from './CreatorVideosSection';
 import { HorizontalProductScroll } from './ProductSection';
 import { shareContent } from '@/utils/share';
+import { trackViewContent } from '@/lib/facebookPixel';
 
 interface ProductDrawerProps {
   product: Product | null;
@@ -55,6 +56,18 @@ export const ProductDrawer = memo(({ product, isOpen, onClose, onBuyNow, onProdu
         item.selectedColor === selectedColor
     );
   }, [product, items, selectedSize, selectedColor]);
+
+  // Rastrear ViewContent quando produto for visualizado
+  useEffect(() => {
+    if (isOpen && product) {
+      trackViewContent(
+        product.id,
+        product.name,
+        product.price,
+        product.category
+      );
+    }
+  }, [isOpen, product]);
 
   const handleAddToCart = useCallback(() => {
     if (!product) return;

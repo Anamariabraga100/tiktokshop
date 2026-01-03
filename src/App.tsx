@@ -3,14 +3,29 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { useEffect } from "react";
 import { CartProvider } from "./context/CartContext";
 import { CouponProvider } from "./context/CouponContext";
 import { CustomerProvider } from "./context/CustomerContext";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import ThankYou from "./pages/ThankYou";
+import { initFacebookPixel, trackPageView } from "./lib/facebookPixel";
 
 const queryClient = new QueryClient();
+
+// Inicializar Facebook Pixel
+const FacebookPixelInit = () => {
+  useEffect(() => {
+    const pixelId = import.meta.env.VITE_FACEBOOK_PIXEL_ID;
+    if (pixelId) {
+      initFacebookPixel(pixelId);
+      trackPageView();
+    }
+  }, []);
+
+  return null;
+};
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -18,6 +33,7 @@ const App = () => (
       <CartProvider>
         <CouponProvider>
           <CustomerProvider>
+            <FacebookPixelInit />
             <Toaster />
             <Sonner />
             <BrowserRouter>

@@ -220,3 +220,4 @@ O fluxo é idêntico:
 - ⚠️ **Polling apenas detecta**: Frontend não decide, apenas detecta mudanças
 - ⚠️ **Idempotência garantida**: Webhook não processa duas vezes o mesmo status
 
+

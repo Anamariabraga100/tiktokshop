@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, ReactNode, useEffect, useMe
 import { CartItem, Product } from '@/types/product';
 import { toast } from 'sonner';
 import miniKitCanetas from '@/assets/products/Mini Kit canetas.png';
+import { trackAddToCart } from '@/lib/facebookPixel';
 
 interface CartContextType {
   items: CartItem[];
@@ -39,6 +40,16 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       }
 
       toast.success('Adicionado ao carrinho!', { id: `cart-add-${product.id}` });
+      
+      // Rastrear evento AddToCart no Facebook Pixel
+      trackAddToCart(
+        product.id,
+        product.name,
+        product.price,
+        1,
+        product.category
+      );
+      
       return [
         ...prev,
         { ...product, quantity: 1, selectedSize: size, selectedColor: color },

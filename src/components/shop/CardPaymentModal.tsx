@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, CreditCard, Lock, AlertCircle } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useCart } from '@/context/CartContext';
@@ -16,8 +16,9 @@ interface CardPaymentModalProps {
 }
 
 export const CardPaymentModal = ({ isOpen, onClose }: CardPaymentModalProps) => {
-  const { totalPrice } = useCart();
-  const { getApplicableCoupon } = useCoupons();
+  const { totalPrice, items } = useCart();
+  const { getApplicableCoupon, isFirstPurchase } = useCoupons();
+  const { hasAddress } = useCustomer();
   const [cardNumber, setCardNumber] = useState('');
   const [cardName, setCardName] = useState('');
   const [expiryMonth, setExpiryMonth] = useState('');
@@ -27,10 +28,72 @@ export const CardPaymentModal = ({ isOpen, onClose }: CardPaymentModalProps) => 
   const [isProcessing, setIsProcessing] = useState(false);
   const [showError, setShowError] = useState(false);
 
-  // Calcular valor final
-  const applicableCoupon = getApplicableCoupon(totalPrice);
-  const couponDiscount = applicableCoupon ? (totalPrice * applicableCoupon.discountPercent) / 100 : 0;
-  const finalPrice = totalPrice - couponDiscount;
+  // Calcular valor final (MESMA LÓGICA DO CARTDRAWER)
+  const safeTotalPrice = totalPrice || 0;
+  
+  // Verificar frete grátis (mesma lógica do CartDrawer)
+  const freeShippingThreshold = 99;
+  const freeShippingFromThankYou = localStorage.getItem('freeShippingFromThankYou') === 'true';
+  const hasFreeShippingCalculated = safeTotalPrice >= freeShippingThreshold || freeShippingFromThankYou;
+  
+  // Aplicar cupom de R$5 apenas na primeira compra
+  const firstPurchaseDiscount = items.length > 0 && isFirstPurchase() ? 5 : 0;
+  
+  // Outros cupons percentuais são aplicados se ativos
+  const applicableCoupon = getApplicableCoupon(safeTotalPrice);
+  const otherCouponDiscount = applicableCoupon && applicableCoupon.id !== '4'
+    ? (safeTotalPrice * applicableCoupon.discountPercent) / 100
+    : 0;
+  
+  // Total de desconto de cupons (R$5 fixo + outros cupons)
+  const couponDiscount = firstPurchaseDiscount + otherCouponDiscount;
+  const priceAfterCoupon = safeTotalPrice - couponDiscount;
+  
+  // Cartão NÃO tem desconto adicional (diferente do PIX)
+  const priceAfterCard = priceAfterCoupon;
+  
+  // Calcular frete (usar o mesmo valor do CartDrawer)
+  const shippingPrice = useMemo(() => {
+    if (!hasAddress) {
+      return 0;
+    }
+    // Se tem frete grátis, sempre usar 0
+    if (hasFreeShippingCalculated) {
+      return 0;
+    }
+    // Usar o valor salvo do CartDrawer (garante que seja o mesmo valor mostrado)
+    const savedShippingPrice = localStorage.getItem('currentShippingPrice');
+    if (savedShippingPrice) {
+      const saved = parseFloat(savedShippingPrice);
+      // Se o valor salvo for 0 mas não deveria ter frete grátis, recalcular
+      if (saved === 0 && !hasFreeShippingCalculated) {
+        const calculated = 10.80 + Math.random() * (18.90 - 10.80);
+        localStorage.setItem('currentShippingPrice', calculated.toString());
+        return calculated;
+      }
+      return saved;
+    }
+    // Se não tiver salvo, calcular (fallback)
+    const calculated = 10.80 + Math.random() * (18.90 - 10.80);
+    localStorage.setItem('currentShippingPrice', calculated.toString());
+    return calculated;
+  }, [hasAddress, hasFreeShippingCalculated]);
+  
+  // Valor final incluindo frete (IMPORTANTE: deve incluir frete como no CartDrawer)
+  const finalPrice = priceAfterCard + shippingPrice;
+  
+  // Debug: Log dos cálculos
+  console.log('💳 CardPaymentModal - Cálculo de valores:', {
+    totalPrice: safeTotalPrice,
+    firstPurchaseDiscount,
+    otherCouponDiscount,
+    couponDiscount,
+    priceAfterCoupon,
+    priceAfterCard,
+    shippingPrice,
+    hasFreeShippingCalculated,
+    finalPrice,
+  });
   
   // Calcular valor da parcela com juros (taxa de 2.5% ao mês para 2x, 3x, 4x)
   const calculateInstallmentValue = (numInstallments: number) => {

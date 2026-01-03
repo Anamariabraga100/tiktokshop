@@ -9,6 +9,7 @@ import { CPFModal } from './CPFModal';
 import { PixPaymentModal } from './PixPaymentModal';
 import { CardPaymentModal } from './CardPaymentModal';
 import { toast } from 'sonner';
+import { trackInitiateCheckout } from '@/lib/facebookPixel';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -128,12 +129,16 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
     let price: number;
     const savedShippingPrice = localStorage.getItem('currentShippingPrice');
     
-    if (savedShippingPrice && hasAddress) {
-      // Usar valor salvo para manter consistência
+    // Se tem frete grátis, sempre usar 0 (não usar valor salvo)
+    if (hasFreeShipping) {
+      price = 0;
+      localStorage.setItem('currentShippingPrice', '0');
+    } else if (savedShippingPrice && hasAddress) {
+      // Usar valor salvo para manter consistência (apenas se não for frete grátis)
       price = parseFloat(savedShippingPrice);
     } else {
       // Calcular novo valor e salvar
-      price = hasFreeShipping ? 0 : (10.80 + Math.random() * (18.90 - 10.80));
+      price = hasAddress ? (10.80 + Math.random() * (18.90 - 10.80)) : 0;
       if (hasAddress) {
         localStorage.setItem('currentShippingPrice', price.toString());
       }
@@ -150,6 +155,20 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
 
   // Calcular preço final incluindo frete
   const finalPrice = priceAfterPix + shippingPrice;
+  
+  // Debug: Log dos cálculos
+  console.log('🛒 CartDrawer - Cálculo de valores:', {
+    totalPrice,
+    firstPurchaseDiscount,
+    otherCouponDiscount,
+    couponDiscount,
+    priceAfterCoupon,
+    pixDiscount,
+    priceAfterPix,
+    shippingPrice,
+    hasFreeShipping,
+    finalPrice,
+  });
 
   const handleCheckout = () => {
     if (!hasAddress) {
@@ -161,6 +180,27 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
       setShowCPFAlert(true);
       return;
     }
+    
+    // Rastrear evento InitiateCheckout no Facebook Pixel
+    const regularItems = items.filter(item => !item.isGift);
+    const contents = regularItems.map(item => ({
+      id: item.id,
+      quantity: item.quantity,
+      item_price: item.price,
+    }));
+    
+    trackInitiateCheckout(
+      finalPrice,
+      regularItems.reduce((sum, item) => sum + item.quantity, 0),
+      contents,
+      {
+        email: customerData?.email,
+        phone: customerData?.phone,
+        firstName: customerData?.name?.split(' ')[0],
+        lastName: customerData?.name?.split(' ').slice(1).join(' '),
+        externalId: customerData?.cpf?.replace(/\D/g, ''),
+      }
+    );
     
     // Abrir modal baseado no método selecionado
     if (selectedPaymentMethod === 'pix') {

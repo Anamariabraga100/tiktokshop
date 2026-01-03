@@ -53,3 +53,4 @@ Após responder o checklist:
 3. Testar `/api/test` novamente
 4. Compartilhar resultados
 
+

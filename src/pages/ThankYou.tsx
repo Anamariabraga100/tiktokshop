@@ -7,15 +7,18 @@ import { Product, CartItem, CreatorVideo } from '@/types/product';
 import { Button } from '@/components/ui/button';
 import { useCart } from '@/context/CartContext';
 import { useCoupons } from '@/context/CouponContext';
+import { useCustomer } from '@/context/CustomerContext';
 import { toast } from 'sonner';
 import { VariantSelectorModal } from '@/components/shop/VariantSelectorModal';
 import { shareContent } from '@/utils/share';
+import { trackPurchase } from '@/lib/facebookPixel';
 
 const ThankYou = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { addToCart } = useCart();
   const { activateCoupon } = useCoupons();
+  const { customerData } = useCustomer();
   const [purchasedItems, setPurchasedItems] = useState<CartItem[]>([]);
   const [orderNumber, setOrderNumber] = useState<string>('');
   const [fullscreenVideoIndex, setFullscreenVideoIndex] = useState<number | null>(null);
@@ -184,6 +187,36 @@ const ThankYou = () => {
       setPurchasedItems([]);
     }
   }, [location.state, navigate, paymentStatus]);
+
+  // Rastrear evento Purchase quando pagamento for confirmado
+  useEffect(() => {
+    if (paymentStatus === 'paid' && purchasedItems.length > 0 && orderNumber) {
+      // Calcular valor total e itens
+      const regularItems = purchasedItems.filter(item => !item.isGift);
+      const totalValue = regularItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+      const numItems = regularItems.reduce((sum, item) => sum + item.quantity, 0);
+      const contents = regularItems.map(item => ({
+        id: item.id,
+        quantity: item.quantity,
+        item_price: item.price,
+      }));
+
+      // Rastrear evento Purchase no Facebook Pixel
+      trackPurchase(
+        orderNumber,
+        totalValue,
+        numItems,
+        contents,
+        {
+          email: customerData?.email,
+          phone: customerData?.phone,
+          firstName: customerData?.name?.split(' ')[0],
+          lastName: customerData?.name?.split(' ').slice(1).join(' '),
+          externalId: customerData?.cpf?.replace(/\D/g, ''),
+        }
+      );
+    }
+  }, [paymentStatus, purchasedItems, orderNumber, customerData]);
 
   // Obter categorias dos produtos comprados
   const purchasedCategories = useMemo(() => {

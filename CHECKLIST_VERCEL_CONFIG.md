@@ -193,3 +193,4 @@ Se após todas essas verificações o problema persistir, pode ser necessário:
 2. **Verificar se há conflitos de configuração** entre diferentes presets
 3. **Considerar usar Vercel CLI localmente** para testar as funções
 
+

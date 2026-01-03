@@ -58,13 +58,27 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
     if (!hasAddress) {
       return 0;
     }
-    // Usar o valor salvo do CartDrawer (garante que seja o mesmo valor mostrado)
+    
+    // IMPORTANTE: Se tem frete grátis, sempre retornar 0
+    if (hasFreeShipping) {
+      return 0;
+    }
+    
+    // Se não tem frete grátis, usar valor salvo do CartDrawer ou calcular
     const savedShippingPrice = localStorage.getItem('currentShippingPrice');
     if (savedShippingPrice) {
-      return parseFloat(savedShippingPrice);
+      const saved = parseFloat(savedShippingPrice);
+      // Se o valor salvo for 0 mas não tem frete grátis, recalcular
+      if (saved === 0 && !hasFreeShipping) {
+        const calculated = 10.80 + Math.random() * (18.90 - 10.80);
+        localStorage.setItem('currentShippingPrice', calculated.toString());
+        return calculated;
+      }
+      return saved;
     }
+    
     // Se não tiver salvo, calcular (fallback)
-    const calculated = hasFreeShipping ? 0 : (10.80 + Math.random() * (18.90 - 10.80));
+    const calculated = 10.80 + Math.random() * (18.90 - 10.80);
     localStorage.setItem('currentShippingPrice', calculated.toString());
     return calculated;
   }, [hasAddress, hasFreeShipping]);
