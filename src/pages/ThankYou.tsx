@@ -442,15 +442,17 @@ const ThankYou = () => {
     }, 500);
   };
 
-  // Função para gerar likes aleatório para cada vídeo
+  // Função para gerar likes aleatório para cada vídeo (SEMPRE aleatório, ignora productLikesCount)
   const getLikesCount = useCallback((videoId: string, productLikesCount?: number) => {
-    // Se o produto tem likesCount, usar ele
-    if (productLikesCount) return productLikesCount;
-    // Gerar número aleatório entre 3.000 e 80.000 para mais variedade
+    // SEMPRE gerar número aleatório, ignorando productLikesCount
     // Usar videoId como seed para manter consistência por vídeo, mas variar entre vídeos
     const seed = videoId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    const random = (Math.sin(seed * 9301 + 49297) * 10000) % 1;
-    return Math.floor(Math.abs(random) * 77000) + 3000; // Entre 3k e 80k
+    // Usar múltiplos fatores para garantir melhor distribuição
+    const random1 = (Math.sin(seed * 9301 + 49297) * 10000) % 1;
+    const random2 = (Math.cos(seed * 7919 + 104729) * 10000) % 1;
+    const combined = (Math.abs(random1) + Math.abs(random2)) / 2;
+    // Gerar entre 2.500 e 95.000 para mais variedade
+    return Math.floor(combined * 92500) + 2500;
   }, []);
 
   const handleVideoClick = (index: number) => {
