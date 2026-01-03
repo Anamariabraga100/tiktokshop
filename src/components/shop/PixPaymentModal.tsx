@@ -24,6 +24,7 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
   const [pixCode, setPixCode] = useState<string>('');
   const [umbrellaTransaction, setUmbrellaTransaction] = useState<any>(null);
   const [transactionCreated, setTransactionCreated] = useState(false); // Proteção contra múltiplos cliques
+  const [transactionId, setTransactionId] = useState<string | null>(null); // ID da transação para polling
   const navigate = useNavigate();
 
   // Calcular valor final com desconto PIX de 10% (simulação)
@@ -123,11 +124,22 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
           
           console.log('✅ Transação criada:', {
             id: transaction.id,
+            transactionId: transaction.transactionId || transaction.id,
             status: transaction.status,
             hasQrCode: !!(transaction.qrCode || transaction.pix?.qrCode),
           });
           
           setUmbrellaTransaction(transaction);
+          
+          // Salvar transactionId para polling
+          // A resposta vem como: { id, transactionId, ... } ou { data: { id, transactionId, ... } }
+          const txId = transaction.transactionId || transaction.id || transaction.data?.transactionId || transaction.data?.id;
+          if (txId) {
+            setTransactionId(txId);
+            console.log('📝 TransactionId salvo para polling:', txId);
+          } else {
+            console.warn('⚠️ TransactionId não encontrado na resposta:', transaction);
+          }
           
           // Obter QR Code PIX (pode estar em diferentes campos)
           const qrCode = transaction.qrCode || transaction.pix?.qrCode || transaction.pix?.qrCodeImage || '';
@@ -183,8 +195,99 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
     if (!isOpen) {
       setTransactionCreated(false);
       setIsProcessing(false);
+      setTransactionId(null); // Resetar transactionId ao fechar
     }
   }, [isOpen]);
+
+  // Polling para verificar status do pagamento
+  useEffect(() => {
+    if (!isOpen || !transactionId || !pixCode) {
+      return; // Não fazer polling se modal fechado, sem transactionId ou sem QR Code
+    }
+
+    console.log('🔄 Iniciando polling para transactionId:', transactionId);
+
+    const checkPaymentStatus = async () => {
+      try {
+        const response = await fetch(`/api/order-status?transactionId=${transactionId}`);
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+          console.warn('⚠️ Erro ao verificar status:', data.error || 'Erro desconhecido');
+          return; // Continuar tentando
+        }
+
+        console.log('📊 Status verificado:', {
+          transactionId,
+          status: data.status,
+          timestamp: new Date().toISOString()
+        });
+
+        // Se pagamento foi confirmado, redirecionar
+        if (data.status === 'PAID') {
+          console.log('✅ Pagamento confirmado! Redirecionando...');
+          
+          // Parar polling
+          // (será limpo pelo cleanup do useEffect)
+          
+          // Fechar modal
+          onClose();
+          
+          // Marcar compra como concluída se for primeira compra
+          if (isFirstPurchase()) {
+            markPurchaseCompleted();
+          }
+          
+          // Mostrar toast de sucesso
+          toast.success('Pagamento confirmado! Redirecionando...', {
+            id: 'payment-confirmed',
+            duration: 3000
+          });
+          
+          // Redirecionar para página de agradecimento
+          setTimeout(() => {
+            try {
+              navigate('/thank-you', {
+                state: {
+                  items: items,
+                  transaction: umbrellaTransaction,
+                  paymentPending: false, // Pagamento confirmado
+                  transactionId: transactionId,
+                }
+              });
+            } catch (error) {
+              console.error('Erro ao navegar:', error);
+              window.location.href = '/thank-you';
+            }
+          }, 1000);
+        } else if (data.status === 'EXPIRED') {
+          console.warn('⏰ PIX expirado');
+          toast.error('O PIX expirou. Gere um novo código.', {
+            id: 'pix-expired',
+            duration: 5000
+          });
+          // Parar polling se expirou
+          // (será limpo pelo cleanup do useEffect)
+        }
+      } catch (error: any) {
+        console.error('❌ Erro ao verificar status do pagamento:', error);
+        // Não mostrar erro para o usuário, apenas logar
+        // Continuar tentando
+      }
+    };
+
+    // Verificar imediatamente
+    checkPaymentStatus();
+
+    // Configurar polling a cada 5 segundos
+    const interval = setInterval(checkPaymentStatus, 5000);
+
+    // Cleanup: parar polling quando modal fechar ou transactionId mudar
+    return () => {
+      console.log('🛑 Parando polling');
+      clearInterval(interval);
+    };
+  }, [isOpen, transactionId, pixCode, items, umbrellaTransaction, navigate, onClose, isFirstPurchase, markPurchaseCompleted]);
 
   const handleCopy = async () => {
     try {
