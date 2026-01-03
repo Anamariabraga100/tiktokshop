@@ -1,13 +1,11 @@
 // Vercel Serverless Function para criar transação PIX
 // Rota: /api/create-pix-transaction
-// Formato: Node.js Runtime
+// ESM PURO - package.json tem "type": "module"
 
 // ==========================================
-// 🧪 CAMADA 1 - TESTE: Endpoint está vivo?
-// Versão ULTRA SIMPLIFICADA para diagnóstico
+// 🧪 TESTE: Endpoint está carregando?
 // ==========================================
-
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   try {
     // CORS
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -19,20 +17,19 @@ module.exports = async (req, res) => {
       return res.status(200).json({ success: true });
     }
 
-    // Retornar JSON simples - TESTE CAMADA 1
+    // TESTE: Retornar JSON simples para confirmar que carregou
     return res.status(200).json({
       ok: true,
-      step: 'backend-alive',
-      message: 'Endpoint está funcionando!',
+      step: 'create-pix-loaded',
+      message: 'Endpoint carregou com sucesso!',
       method: req.method,
       timestamp: new Date().toISOString()
     });
-  } catch (error) {
-    // Se der erro, ainda retornar JSON
+  } catch (err) {
+    console.error('❌ Erro no handler:', err);
     return res.status(500).json({
-      ok: false,
-      error: error.message || 'Erro desconhecido',
-      step: 'backend-alive-error'
+      success: false,
+      error: err.message || 'Erro desconhecido'
     });
   }
-};
+}
