@@ -162,24 +162,40 @@ export default async function handler(req, res) {
     // Sucesso - padronizar resposta para o frontend
     const transactionData = data?.data || data;
     
+    // Extrair QR Code (pode estar em diferentes campos)
+    const qrCode = transactionData?.pix?.qrcode || 
+                   transactionData?.pix?.qrCode || 
+                   transactionData?.qrCode ||
+                   transactionData?.pix?.copyPaste ||
+                   transactionData?.copyPaste;
+    
     console.log('✅ PIX criado com sucesso:', {
       transactionId: transactionData?.transactionId || transactionData?.id,
       status: transactionData?.status,
-      hasQrCode: !!(transactionData?.pix?.qrcode || transactionData?.pix?.qrCode)
+      hasQrCode: !!qrCode
     });
 
-    // Retornar apenas o que o frontend precisa
+    // Retornar resposta compatível com frontend
     return res.status(200).json({
       success: true,
       status: 200,
-      transactionId: transactionData?.transactionId || transactionData?.id,
-      externalRef: transactionData?.externalRef,
-      status: transactionData?.status,
-      amount: transactionData?.amount,
-      pix: {
-        qrcode: transactionData?.pix?.qrcode || transactionData?.pix?.qrCode || transactionData?.qrCode,
-        copyPaste: transactionData?.pix?.copyPaste || transactionData?.copyPaste,
-        expiresAt: transactionData?.pix?.expirationDate || transactionData?.pix?.expiresAt
+      message: 'Transação PIX criada com sucesso',
+      // Campos diretos para compatibilidade
+      pixCode: qrCode,
+      // Estrutura completa para compatibilidade com código existente
+      data: {
+        id: transactionData?.transactionId || transactionData?.id,
+        transactionId: transactionData?.transactionId || transactionData?.id,
+        externalRef: transactionData?.externalRef,
+        status: transactionData?.status,
+        amount: transactionData?.amount,
+        qrCode: qrCode,
+        pix: {
+          qrCode: qrCode,
+          qrcode: qrCode,
+          copyPaste: transactionData?.pix?.copyPaste || transactionData?.copyPaste,
+          expirationDate: transactionData?.pix?.expirationDate || transactionData?.pix?.expiresAt
+        }
       }
     });
 
