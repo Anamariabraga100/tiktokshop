@@ -53,6 +53,8 @@ export default async function handler(req, res) {
     }
 
     // Preparar dados do evento para Facebook Conversions API
+    const testEventCode = process.env.FACEBOOK_TEST_EVENT_CODE;
+    
     const eventDataForFacebook = {
       data: [
         {
@@ -61,6 +63,7 @@ export default async function handler(req, res) {
           event_id: eventData?.eventId || `${Date.now()}-${Math.random().toString(36).substring(7)}`,
           event_source_url: eventData?.sourceUrl || req.headers.referer || '',
           action_source: 'website',
+          ...(testEventCode && { test_event_code: testEventCode }), // Adicionar código de teste se configurado
           user_data: {
             ...(userData?.email && { 
               em: userData.email.toLowerCase().trim() // Hash será feito pelo Facebook
