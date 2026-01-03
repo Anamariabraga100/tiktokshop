@@ -298,28 +298,6 @@ export const HelpDrawer = ({ isOpen, onClose }: HelpDrawerProps) => {
                   ))}
                 </div>
               </div>
-
-              {/* Contact Section */}
-              <div className="bg-muted rounded-xl p-4">
-                <h3 className="font-semibold mb-2">Precisa de mais ajuda?</h3>
-                <p className="text-sm text-muted-foreground mb-3">
-                  Entre em contato conosco através dos canais abaixo:
-                </p>
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">📧 Email:</span>
-                    <span className="text-muted-foreground">suporte@loja.com.br</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">📱 WhatsApp:</span>
-                    <span className="text-muted-foreground">(11) 99999-9999</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">🕐 Horário:</span>
-                    <span className="text-muted-foreground">Segunda a Sexta, 9h às 18h</span>
-                  </div>
-                </div>
-              </div>
             </div>
           </motion.div>
         </>

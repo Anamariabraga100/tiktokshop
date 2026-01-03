@@ -17,7 +17,12 @@ import shortLinho from '@/assets/products/Short Masculino Linho Premium.webp';
 import kitBodyCream from '@/assets/products/Kit Body Cream e Body Splash Blue.webp';
 import navalha from '@/assets/products/Navalha Para Barbearia Profissional.jpg';
 import necessaire from '@/assets/products/Necessaire Masculina Organizadora Viagem.webp';
-import kitFerramentas from '@/assets/products/Kit De Ferramentas 46 Peças Completo.webp';
+import kitFerramentas from '@/assets/products/Kit De Ferramentas 46 Peças Completo Vermelho.jpg';
+import videoKitFerramentas1 from '@/assets/video-product/Kit De Ferramentas 46 Peças Completo 1.mp4';
+import videoKitFerramentas2 from '@/assets/video-product/Kit De Ferramentas 46 Peças Completo 2.mp4';
+import videoKitFerramentas3 from '@/assets/video-product/Kit De Ferramentas 46 Peças Completo 3.mp4';
+import videoKitFerramentas4 from '@/assets/video-product/Kit De Ferramentas 46 Peças Completo 4.mp4';
+import videoKitFerramentas5 from '@/assets/video-product/Kit De Ferramentas 46 Peças Completo 5.mp4';
 import chavesPrecisao from '@/assets/products/Conjunto de Chaves 115 em 1 Precisão.jpg';
 import parafusadeiraPro from '@/assets/products/ParafusadeiraFuradeira Profissional.jpg';
 import capaIphone from '@/assets/products/Capa Para iPhone Silicone Premium.webp';
@@ -42,7 +47,6 @@ import { Product, Category, ProductReview, CreatorVideo } from '@/types/product'
 export const categories: Category[] = [
   { id: '1', name: 'Moda', icon: '👗' },
   { id: '2', name: 'Beleza', icon: '💄' },
-  { id: '3', name: 'Casa', icon: '🏠' },
   { id: '4', name: 'Esportes', icon: '⚽' },
   { id: '5', name: 'Eletrônicos', icon: '📱' },
   { id: '6', name: 'Saúde', icon: '💊' },
@@ -1087,8 +1091,8 @@ Preto, Cinza, Azul Marinho`,
   {
     id: '23',
     name: 'Kit De Ferramentas 46 Peças Completo',
-    price: 9.90,
-    originalPrice: 34.90,
+    price: 31.99,
+    originalPrice: 78.98,
     image: kitFerramentas,
     rating: 4.3,
     soldCount: 23400,
@@ -1101,21 +1105,70 @@ Preto, Cinza, Azul Marinho`,
     brand: 'HandyKit',
     description: `Kit De Ferramentas 46 Peças Completo com todas as ferramentas essenciais para reparos domésticos e profissionais.
 
+**Sobre este item:**
+46 peças em aço vanádio e cromo
+Maleta de transporte resistente
+
+**Conteúdo do Kit:**
+• 13 Soquetes: de 4mm à 14mm
+• 21 Pontas de Soquete: FD4, 5.5, 7, HW3, 4, 5, 6, 7, 8, T10, 15, 20, 25, 30, 40
+• Chaves L Allen: de 1.5mm à 2.5mm
+• 1 Junta Universal de 1/4"
+• 1 Barra de Extensão DR 1/4" × 2"
+• 1 Barra de Extensão DR 1/4" × 4"
+• 1 Barra de Extensão Flexível DR 1/4" × 6"
+• 1 Barra Deslizante T 1/4"
+• 1 Catraca de Liberação Rápida 1/4"
+• 1 Alça Giratória de 6"
+• 1 Adaptador de Ponta
+• 1 Maleta de Ferramentas
+
 **Características Técnicas:**
 • Total de peças: 46
-• Material: Aço carbono tratado
+• Material: Aço vanádio e cromo de alta qualidade
 • Acabamento: Cromado anti-ferrugem
 • Maleta: Plástico resistente com organizador
 • Peso: 2.5kg
 
-**Conteúdo do Kit:**
-Chaves de fenda (various sizes)
-Chaves philips (various sizes)
-Alicates
-Martelo
-Nível
-Fita métrica
-E muito mais...`,
+**Aplicações:**
+Reparos domésticos, montagem de móveis, manutenção de veículos, trabalhos profissionais`,
+    creatorVideos: [
+      {
+        id: 'cv-kit-ferramentas-1',
+        videoUrl: videoKitFerramentas1,
+        creatorName: 'Ferramentas BR',
+        creatorInitials: 'FB',
+        title: 'Kit completo de ferramentas!',
+      },
+      {
+        id: 'cv-kit-ferramentas-2',
+        videoUrl: videoKitFerramentas2,
+        creatorName: 'DIY Brasil',
+        creatorInitials: 'DB',
+        title: 'Unboxing do kit 46 peças',
+      },
+      {
+        id: 'cv-kit-ferramentas-3',
+        videoUrl: videoKitFerramentas3,
+        creatorName: 'Casa e Construção',
+        creatorInitials: 'CC',
+        title: 'Testando o kit de ferramentas',
+      },
+      {
+        id: 'cv-kit-ferramentas-4',
+        videoUrl: videoKitFerramentas4,
+        creatorName: 'HandyTools',
+        creatorInitials: 'HT',
+        title: 'Kit completo para casa',
+      },
+      {
+        id: 'cv-kit-ferramentas-5',
+        videoUrl: videoKitFerramentas5,
+        creatorName: 'Ferramentas Pro',
+        creatorInitials: 'FP',
+        title: 'Review do kit 46 peças',
+      },
+    ] as CreatorVideo[],
   },
   {
     id: '24',
@@ -1206,8 +1259,8 @@ Preto, Transparente, Rosa, Azul, Verde`,
   {
     id: '27',
     name: 'Kit Parafusadeira Doméstica com maleta Leve Portátil USB Recarregável—Presentes de Natal',
-    price: 49.90,
-    originalPrice: 99.90,
+    price: 27.90,
+    originalPrice: 68.90,
     image: parafusadeiraDomestica,
     rating: 4.5,
     soldCount: 10700,

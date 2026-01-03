@@ -30,12 +30,27 @@ export const ProductDrawer = memo(({ product, isOpen, onClose, onBuyNow, onProdu
   const [showFullDescription, setShowFullDescription] = useState(false);
   const [justAdded, setJustAdded] = useState(false);
 
-  // Get similar products (same category, excluding current product)
+  // Get similar products (same category first, then other categories if needed to reach 8 items)
   const similarProducts = useMemo(() => {
     if (!product) return [];
-    return products
+    
+    const targetCount = 8;
+    
+    // Primeiro, buscar produtos da mesma categoria
+    const sameCategory = products
       .filter(p => p.id !== product.id && p.category === product.category)
-      .slice(0, 10);
+      .slice(0, targetCount);
+    
+    // Se não tiver 8 itens, buscar de outras categorias
+    if (sameCategory.length < targetCount) {
+      const otherCategories = products
+        .filter(p => p.id !== product.id && p.category !== product.category)
+        .slice(0, targetCount - sameCategory.length);
+      
+      return [...sameCategory, ...otherCategories].slice(0, targetCount);
+    }
+    
+    return sameCategory;
   }, [product]);
 
   const handleActivateCoupon = useCallback((couponId: string) => {
