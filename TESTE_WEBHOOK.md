@@ -36,6 +36,19 @@ Invoke-RestMethod -Uri "https://tiktokshop-orpin.vercel.app/api/webhook-umbrella
   -Body $body
 ```
 
+## 🧪 Teste via Script Node.js (Mais Fácil)
+
+```bash
+# Usar transactionId padrão
+node test-webhook.js
+
+# Especificar transactionId
+node test-webhook.js 13eb6cd8-5ea6-4e30-bc14-b716cc66ae53
+
+# Especificar transactionId e status
+node test-webhook.js 13eb6cd8-5ea6-4e30-bc14-b716cc66ae53 PAID
+```
+
 ### ✅ Resultado Esperado
 
 ```json
