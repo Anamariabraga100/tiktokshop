@@ -20,7 +20,6 @@ import necessaire from '@/assets/products/Necessaire Masculina Organizadora Viag
 import kitFerramentas from '@/assets/products/Kit De Ferramentas 46 Peças Completo Vermelho.jpg';
 import videoKitFerramentas1 from '@/assets/video-product/Kit De Ferramentas 46 Peças Completo 1.mp4';
 import videoKitFerramentas2 from '@/assets/video-product/Kit De Ferramentas 46 Peças Completo 2.mp4';
-import videoKitFerramentas3 from '@/assets/video-product/Kit De Ferramentas 46 Peças Completo 3.mp4';
 import videoKitFerramentas4 from '@/assets/video-product/Kit De Ferramentas 46 Peças Completo 4.mp4';
 import videoKitFerramentas5 from '@/assets/video-product/Kit De Ferramentas 46 Peças Completo 5.mp4';
 import chavesPrecisao from '@/assets/products/Conjunto de Chaves 115 em 1 Precisão.jpg';
@@ -1146,13 +1145,6 @@ Reparos domésticos, montagem de móveis, manutenção de veículos, trabalhos p
         creatorName: 'DIY Brasil',
         creatorInitials: 'DB',
         title: 'Unboxing do kit 46 peças',
-      },
-      {
-        id: 'cv-kit-ferramentas-3',
-        videoUrl: videoKitFerramentas3,
-        creatorName: 'Casa e Construção',
-        creatorInitials: 'CC',
-        title: 'Testando o kit de ferramentas',
       },
       {
         id: 'cv-kit-ferramentas-4',
