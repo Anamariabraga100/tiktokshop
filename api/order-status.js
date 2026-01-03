@@ -51,7 +51,72 @@ export default async function handler(req, res) {
           status: order.status
         });
 
-        // Usar status do banco (atualizado pelo webhook)
+        // ⚠️ MELHORIA: Se status no banco é WAITING_PAYMENT, verificar gateway também
+        // Isso garante que mesmo se o webhook falhar, o polling detecta o pagamento
+        const dbStatus = order.umbrella_status || order.status;
+        const isWaitingPayment = dbStatus === 'WAITING_PAYMENT' || 
+                                 dbStatus === 'waiting_payment' || 
+                                 dbStatus === 'aguardando_pagamento';
+
+        // Se está aguardando pagamento, verificar gateway em paralelo
+        if (isWaitingPayment) {
+          try {
+            const API_KEY = process.env.UMBRELLAPAG_API_KEY;
+            if (API_KEY) {
+              const gatewayResponse = await fetch(`${BASE_URL}/user/transactions/${transactionId}`, {
+                method: 'GET',
+                headers: {
+                  'x-api-key': API_KEY,
+                  'User-Agent': 'UMBRELLAB2B/1.0',
+                  'Content-Type': 'application/json'
+                }
+              });
+
+              if (gatewayResponse.ok) {
+                const gatewayData = await gatewayResponse.json();
+                const gatewayTransaction = gatewayData?.data || gatewayData;
+                const gatewayStatus = gatewayTransaction?.status;
+
+                // Se gateway mostra PAID mas banco não, atualizar banco automaticamente
+                if (gatewayStatus === 'PAID' && dbStatus !== 'PAID') {
+                  console.log('🔄 Gateway mostra PAID mas banco não. Atualizando banco automaticamente...');
+                  
+                  const { updateOrderByTransactionId } = await import('./lib/supabase.js');
+                  await updateOrderByTransactionId(transactionId, {
+                    umbrella_status: 'PAID',
+                    status: 'pago',
+                    umbrella_paid_at: gatewayTransaction?.paidAt || new Date().toISOString(),
+                    umbrella_end_to_end_id: gatewayTransaction?.endToEndId || null,
+                    updated_at: new Date().toISOString()
+                  });
+
+                  console.log('✅ Banco atualizado automaticamente pelo polling');
+                  
+                  // Retornar status atualizado
+                  return res.status(200).json({
+                    success: true,
+                    status: 200,
+                    transactionId: order.umbrella_transaction_id,
+                    externalRef: order.umbrella_external_ref,
+                    orderNumber: order.order_number,
+                    status: 'PAID',
+                    amount: order.total_price,
+                    paidAt: gatewayTransaction?.paidAt || new Date().toISOString(),
+                    source: 'database_updated_by_polling', // Indica que foi atualizado pelo polling
+                    pix: {
+                      qrCode: order.umbrella_qr_code || order.pix_code,
+                    }
+                  });
+                }
+              }
+            }
+          } catch (error) {
+            console.warn('⚠️ Erro ao verificar gateway durante polling:', error);
+            // Continuar com status do banco se houver erro
+          }
+        }
+
+        // Usar status do banco (atualizado pelo webhook ou polling)
         // Mapear status do banco para formato esperado pelo frontend
         let finalStatus = order.umbrella_status || order.status;
         
