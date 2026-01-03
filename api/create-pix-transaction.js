@@ -3,26 +3,30 @@
 // Formato: Node.js Runtime
 
 module.exports = async (req, res) => {
-  // CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-  // OPTIONS (preflight)
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
-  // Apenas POST
-  if (req.method !== 'POST') {
-    return res.status(405).json({ 
-      status: 405,
-      message: 'Method not allowed',
-      error: 'Apenas requisições POST são permitidas'
-    });
-  }
-
+  // TRY/CATCH GLOBAL - Garantir que SEMPRE retornamos JSON
   try {
+    // CORS headers
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+    // OPTIONS (preflight)
+    if (req.method === 'OPTIONS') {
+      return res.status(200).json({ success: true });
+    }
+
+    // Apenas POST
+    if (req.method !== 'POST') {
+      return res.status(405).json({ 
+        status: 405,
+        success: false,
+        message: 'Method not allowed',
+        error: 'Apenas requisições POST são permitidas'
+      });
+    }
+
+    // Handler principal
+    try {
     const { customer, items, totalPrice, metadata } = req.body;
 
     console.log('📥 Dados recebidos:', {
@@ -53,6 +57,7 @@ module.exports = async (req, res) => {
       });
       return res.status(400).json({
         status: 400,
+        success: false,
         message: 'Dados inválidos para criar transação PIX',
         error: 'customer (com cpf e name), items e totalPrice são obrigatórios'
       });
@@ -61,10 +66,15 @@ module.exports = async (req, res) => {
     // Obter API Key
     const API_KEY = process.env.UMBRELLAPAG_API_KEY || process.env.VITE_UMBRELLAPAG_API_KEY;
 
+    // Log de verificação de ENV (CRÍTICO)
+    console.log('🔑 UMBRELLAPAG_API_KEY existe?', !!API_KEY);
+    console.log('🔑 VITE_UMBRELLAPAG_API_KEY existe?', !!process.env.VITE_UMBRELLAPAG_API_KEY);
+
     if (!API_KEY) {
       console.error('❌ API Key não configurada');
       return res.status(500).json({
         status: 500,
+        success: false,
         message: 'Configuração do servidor incompleta',
         error: 'API Key do UmbrellaPag não configurada. Verifique as variáveis de ambiente.'
       });
@@ -72,7 +82,16 @@ module.exports = async (req, res) => {
 
     // Normalizar CPF
     const normalizedCPF = customer.cpf.replace(/\D/g, '');
-    const amountInCents = Math.round(totalPrice * 100);
+    
+    // NORMALIZAR VALOR DO PIX (CRÍTICO) - Evitar 4.473000000000001
+    const normalizedPrice = Number(Number(totalPrice).toFixed(2));
+    const amountInCents = Math.round(normalizedPrice * 100);
+    
+    console.log('💰 Valor normalizado:', {
+      original: totalPrice,
+      normalized: normalizedPrice,
+      cents: amountInCents
+    });
 
     // Converter itens para formato UmbrellaPag
     const umbrellaItems = items
@@ -176,17 +195,37 @@ module.exports = async (req, res) => {
         body: JSON.stringify(payload),
       });
 
+      // BLINDAR PARSE DA RESPOSTA DO GATEWAY PIX (não assumir JSON)
+      const responseText = await response.text();
+      console.log('📥 Resposta raw do gateway PIX:', responseText.substring(0, 200));
+
       if (!response.ok) {
-        const errorText = await response.text();
         console.error('❌ Erro na API UmbrellaPag:', {
           status: response.status,
           statusText: response.statusText,
-          errorText,
+          errorText: responseText.substring(0, 500),
         });
-        throw new Error(`UmbrellaPag error ${response.status}: ${errorText}`);
+        
+        // Tentar parsear como JSON para pegar mensagem de erro
+        let errorMessage = `Erro HTTP ${response.status}: ${response.statusText}`;
+        try {
+          const errorJson = JSON.parse(responseText);
+          errorMessage = errorJson.message || errorJson.error || errorMessage;
+        } catch {
+          // Se não for JSON, usar o texto como mensagem
+          errorMessage = responseText.trim() || errorMessage;
+        }
+        
+        throw new Error(`UmbrellaPag error ${response.status}: ${errorMessage}`);
       }
 
-      result = await response.json();
+      // Tentar parsear como JSON (blindado)
+      try {
+        result = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('❌ Gateway PIX retornou algo inválido (não-JSON):', responseText.substring(0, 500));
+        throw new Error('Resposta inválida do gateway PIX: resposta não é JSON válido');
+      }
 
       console.log('📥 Resposta UmbrellaPag:', {
         status: response.status,
@@ -199,6 +238,7 @@ module.exports = async (req, res) => {
         console.error('❌ Resposta inválida:', result);
         return res.status(500).json({
           status: 500,
+          success: false,
           message: result.message || 'Resposta inválida da API',
           error: 'Dados da transação não retornados',
           data: null,
@@ -208,29 +248,42 @@ module.exports = async (req, res) => {
       // Sucesso - retornar no formato esperado pelo frontend
       return res.status(200).json({
         status: 200,
+        success: true,
         message: 'Transação criada com sucesso',
         data: result.data,
         error: null,
-        // Adicionar campos úteis para o frontend
-        success: true,
         pixCode: result.data.pix?.qrCode || result.data.qrCode || null,
       });
 
     } catch (fetchError) {
       console.error('❌ Erro no fetch para UmbrellaPag:', fetchError);
-      throw fetchError; // Será capturado no catch global
+      throw fetchError; // Será capturado no catch interno
     }
 
-  } catch (error) {
-    console.error('❌ Erro ao processar requisição:', error);
+    } catch (innerError) {
+      // Erro interno (validação, fetch, etc.)
+      console.error('❌ Erro ao processar requisição PIX:', innerError);
+      
+      return res.status(500).json({
+        status: 500,
+        success: false,
+        message: 'Erro ao criar transação PIX',
+        error: innerError?.message || 'Erro desconhecido',
+        data: null,
+      });
+    }
+
+  } catch (outerError) {
+    // CATCH GLOBAL - Garantir que SEMPRE retornamos JSON válido
+    console.error('❌ ERRO CRÍTICO no handler PIX:', outerError);
     
-    // Tratamento de erro global (seguindo o tutorial)
+    // NUNCA usar res.send() - sempre res.json()
     return res.status(500).json({
       status: 500,
-      message: 'Erro ao criar PIX',
-      error: error.message || 'Erro desconhecido',
-      data: null,
       success: false,
+      message: 'Erro interno no servidor',
+      error: outerError?.message || 'Erro desconhecido ao processar requisição',
+      data: null,
     });
   }
 };

@@ -270,18 +270,26 @@ export const createPixTransaction = async (
     throw new Error(`Erro de conexão: ${fetchError.message || 'Não foi possível conectar ao servidor'}`);
   }
 
-  // Tentar parsear a resposta
+  // Obter resposta como texto primeiro
+  const responseText = await response.text();
+  console.log('📥 Resposta raw do backend:', responseText);
+  
+  if (!responseText) {
+    throw new Error(`Erro HTTP ${response.status}: Resposta vazia do servidor`);
+  }
+
+  // Tentar parsear como JSON
   try {
-    const responseText = await response.text();
-    console.log('📥 Resposta raw do backend:', responseText);
-    
-    if (!responseText) {
-      throw new Error('Resposta vazia do servidor');
-    }
-    
     result = JSON.parse(responseText);
   } catch (parseError: any) {
-    console.error('❌ Erro ao parsear resposta:', parseError);
+    // Se não for JSON e a resposta não é OK, usar o texto como mensagem de erro
+    if (!response.ok) {
+      const errorMessage = responseText.trim() || `Erro HTTP ${response.status}: ${response.statusText}`;
+      console.error('❌ Erro do servidor (resposta não-JSON):', errorMessage);
+      throw new Error(errorMessage);
+    }
+    // Se for OK mas não é JSON, isso é um problema
+    console.error('❌ Erro ao parsear resposta JSON:', parseError);
     throw new Error(`Erro ao processar resposta do servidor: ${parseError.message}`);
   }
 
@@ -296,8 +304,16 @@ export const createPixTransaction = async (
     error: result.error,
   });
 
-  if (!response.ok || !result.success) {
+  // Verificar se a resposta HTTP é OK
+  if (!response.ok) {
     const errorMessage = result?.message || result?.error || `Erro HTTP ${response.status}: ${response.statusText}`;
+    console.error('❌ Erro na resposta do backend:', errorMessage, result);
+    throw new Error(errorMessage);
+  }
+
+  // Verificar se a resposta da API indica sucesso
+  if (!result.success) {
+    const errorMessage = result?.message || result?.error || 'Erro desconhecido ao criar transação';
     console.error('❌ Erro na resposta do backend:', errorMessage, result);
     throw new Error(errorMessage);
   }
