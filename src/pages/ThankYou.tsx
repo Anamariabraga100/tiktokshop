@@ -212,10 +212,11 @@ const ThankYou = () => {
   // Produtos relacionados (mesma categoria dos comprados)
   // Sempre mostrar pelo menos 8 produtos
   const relatedProducts = useMemo(() => {
-    // Validar e filtrar apenas itens válidos com id
-    const validItems = purchasedItems.filter(item => item && item.id);
-    const purchasedIds = new Set(validItems.map(item => item.id));
-    let related: Product[] = [];
+    try {
+      // Validar e filtrar apenas itens válidos com id
+      const validItems = (purchasedItems || []).filter(item => item && typeof item === 'object' && item.id);
+      const purchasedIds = new Set(validItems.map(item => item.id));
+      let related: Product[] = [];
     
     // Primeiro, tentar pegar produtos da mesma categoria
     if (purchasedCategories.length > 0) {
@@ -241,18 +242,23 @@ const ThankYou = () => {
       related = [...related, ...allProducts.slice(0, needed)];
     }
 
-    // Ordenar por mais vendidos e limitar a 8
-    return related
-      .sort((a, b) => b.soldCount - a.soldCount)
-      .slice(0, 8);
+      // Ordenar por mais vendidos e limitar a 8
+      return related
+        .sort((a, b) => (b.soldCount || 0) - (a.soldCount || 0))
+        .slice(0, 8);
+    } catch (error) {
+      console.error('Erro ao calcular produtos relacionados:', error);
+      return [];
+    }
   }, [purchasedCategories, purchasedItems]);
 
   // Vídeos do criador (pegar vídeos de produtos relacionados)
   const creatorVideos = useMemo(() => {
-    const videos: Array<{ product: Product; video: CreatorVideo }> = [];
-    // Validar e filtrar apenas itens válidos com id
-    const validItems = purchasedItems.filter(item => item && item.id);
-    const purchasedIds = new Set(validItems.map(item => item.id));
+    try {
+      const videos: Array<{ product: Product; video: CreatorVideo }> = [];
+      // Validar e filtrar apenas itens válidos com id
+      const validItems = (purchasedItems || []).filter(item => item && typeof item === 'object' && item.id);
+      const purchasedIds = new Set(validItems.map(item => item.id));
     
     // Primeiro, pegar produtos com mais vídeos (priorizar Kit Barbeador que tem 6 vídeos)
     // Ordenar por: quantidade de vídeos (desc), depois por soldCount (desc)
@@ -266,10 +272,10 @@ const ThankYou = () => {
           return bVideoCount - aVideoCount;
         }
         // Se tiverem a mesma quantidade de vídeos, ordenar por vendas
-        return b.soldCount - a.soldCount;
+        return (b.soldCount || 0) - (a.soldCount || 0);
       });
     
-    // Adicionar vídeos até o limite, priorizando produtos com mais vídeos
+      // Adicionar vídeos até o limite, priorizando produtos com mais vídeos
     productsWithVideos.forEach(product => {
       if (product.creatorVideos && videos.length < 15) {
         product.creatorVideos.forEach(video => {
@@ -278,9 +284,13 @@ const ThankYou = () => {
           }
         });
       }
-    });
-
-    return videos;
+      });
+      
+      return videos;
+    } catch (error) {
+      console.error('Erro ao calcular vídeos do criador:', error);
+      return [];
+    }
   }, [purchasedItems]);
 
   const handleAddToCart = (product: Product, e?: React.MouseEvent) => {
@@ -597,11 +607,30 @@ const ThankYou = () => {
     );
   };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-muted/30">
-      <div className="max-w-7xl mx-auto px-4 py-6 md:py-8">
-        {/* Confirmação de Pagamento - Verificação pelo Backend */}
-        {renderPaymentStatus()}
+  // TESTE: Renderização simplificada para debug
+  console.log('🔍 ThankYou Render:', {
+    paymentStatus,
+    purchasedItemsCount: purchasedItems.length,
+    orderNumber,
+    hasLocationState: !!location.state,
+    hasSessionStorage: !!sessionStorage.getItem('thankYouState'),
+    hasLocalStorage: !!localStorage.getItem('lastOrder'),
+    relatedProductsCount: relatedProducts?.length || 0,
+    creatorVideosCount: creatorVideos?.length || 0,
+  });
+
+  // TESTE: Renderização mínima que sempre aparece
+  try {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-background to-muted/30">
+        <div className="max-w-7xl mx-auto px-4 py-6 md:py-8">
+          {/* TESTE: Banner de debug */}
+          <div className="bg-yellow-100 border border-yellow-400 text-yellow-800 px-4 py-3 rounded mb-4">
+            <strong>DEBUG:</strong> Status: {paymentStatus} | Itens: {purchasedItems.length} | Pedido: {orderNumber || 'N/A'}
+          </div>
+          
+          {/* Confirmação de Pagamento - Verificação pelo Backend */}
+          {renderPaymentStatus()}
 
         {/* Oportunidade Exclusiva */}
         <motion.div
@@ -995,7 +1024,30 @@ const ThankYou = () => {
         />
       </div>
     </div>
-  );
+    );
+  } catch (error) {
+    // TESTE: Capturar qualquer erro de renderização
+    console.error('❌ Erro ao renderizar ThankYou:', error);
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-background to-muted/30 flex items-center justify-center">
+        <div className="text-center max-w-md mx-auto px-4">
+          <div className="bg-red-100 border border-red-400 text-red-800 px-4 py-3 rounded mb-4">
+            <strong>ERRO:</strong> {error instanceof Error ? error.message : 'Erro desconhecido'}
+          </div>
+          <h1 className="text-2xl font-bold mb-2">Obrigado pela sua compra!</h1>
+          <p className="text-muted-foreground mb-4">
+            Seu pagamento foi confirmado. Você receberá atualizações por email.
+          </p>
+          <button
+            onClick={() => navigate('/')}
+            className="bg-primary text-primary-foreground px-6 py-2 rounded-full font-semibold hover:opacity-90"
+          >
+            Voltar para a loja
+          </button>
+        </div>
+      </div>
+    );
+  }
 };
 
 export default ThankYou;

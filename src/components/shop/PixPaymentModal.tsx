@@ -18,7 +18,7 @@ interface PixPaymentModalProps {
 export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPaymentModalProps) => {
   const { totalPrice, items } = useCart();
   const { getApplicableCoupon, isFirstPurchase, markPurchaseCompleted } = useCoupons();
-  const { customerData } = useCustomer();
+  const { customerData, hasAddress } = useCustomer();
   const [copied, setCopied] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [pixCode, setPixCode] = useState<string>('');
@@ -30,6 +30,11 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
   // Calcular valor final com desconto PIX de 10% (simulação)
   // Mesma lógica do CartDrawer para consistência
   const safeTotalPrice = totalPrice || 0;
+  
+  // Verificar frete grátis (mesma lógica do CartDrawer)
+  const freeShippingThreshold = 99;
+  const freeShippingFromThankYou = localStorage.getItem('freeShippingFromThankYou') === 'true';
+  const hasFreeShipping = safeTotalPrice >= freeShippingThreshold || freeShippingFromThankYou;
   
   // Aplicar cupom de R$5 apenas na primeira compra
   const firstPurchaseDiscount = items.length > 0 && isFirstPurchase() ? 5 : 0;
@@ -46,7 +51,19 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
   
   // PIX tem 10% de desconto adicional
   const pixDiscount = priceAfterCoupon * 0.1;
-  const finalPrice = Math.max(0, priceAfterCoupon - pixDiscount);
+  const priceAfterPix = priceAfterCoupon - pixDiscount;
+  
+  // Calcular frete (mesma lógica do CartDrawer)
+  const shippingPrice = useMemo(() => {
+    if (!hasAddress) {
+      return 0;
+    }
+    // Calcular frete (mesmo cálculo do CartDrawer)
+    return hasFreeShipping ? 0 : (10.80 + Math.random() * (18.90 - 10.80));
+  }, [hasAddress, hasFreeShipping]);
+  
+  // Valor final incluindo frete (IMPORTANTE: deve incluir frete como no CartDrawer)
+  const finalPrice = priceAfterPix + shippingPrice;
 
   // Criar transação PIX no UmbrellaPag quando o modal abrir
   useEffect(() => {
@@ -107,8 +124,18 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
               cpf: cpfNormalized.substring(0, 3) + '***',
             },
             itemsCount: items.length,
+            calculo: {
+              subtotal: safeTotalPrice,
+              descontoCupom: couponDiscount,
+              precoAposCupom: priceAfterCoupon,
+              descontoPix: pixDiscount,
+              precoAposPix: priceAfterPix,
+              frete: shippingPrice,
+              totalFinal: finalPrice,
+            },
             totalPrice: finalPrice,
             hasAddress: !!customerData.address,
+            hasFreeShipping: hasFreeShipping,
           });
           
           // Criar transação no UmbrellaPag
