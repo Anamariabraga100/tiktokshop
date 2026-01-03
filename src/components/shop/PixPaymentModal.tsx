@@ -200,6 +200,7 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
   }, [isOpen]);
 
   // Polling para verificar status do pagamento
+  // ⚠️ IMPORTANTE: Backend é a fonte da verdade. Frontend apenas detecta mudanças.
   useEffect(() => {
     if (!isOpen || !transactionId || !pixCode) {
       return; // Não fazer polling se modal fechado, sem transactionId ou sem QR Code
@@ -207,10 +208,25 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
 
     console.log('🔄 Iniciando polling para transactionId:', transactionId);
 
+    // Flag para controlar se o componente ainda está montado
+    let isMounted = true;
+    let interval: NodeJS.Timeout | null = null;
+
     const checkPaymentStatus = async () => {
+      // Verificar se componente ainda está montado
+      if (!isMounted) {
+        console.log('🛑 Componente desmontado, parando polling');
+        return;
+      }
+
       try {
         const response = await fetch(`/api/order-status?transactionId=${transactionId}`);
         const data = await response.json();
+
+        // Verificar novamente se componente ainda está montado após fetch
+        if (!isMounted) {
+          return;
+        }
 
         if (!response.ok || !data.success) {
           console.warn('⚠️ Erro ao verificar status:', data.error || 'Erro desconhecido');
@@ -223,12 +239,21 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
           timestamp: new Date().toISOString()
         });
 
+        // ⚠️ IMPORTANTE: Status vem do backend (fonte da verdade)
         // Se pagamento foi confirmado, redirecionar
         if (data.status === 'PAID') {
-          console.log('✅ Pagamento confirmado! Redirecionando...');
+          console.log('✅ Pagamento confirmado pelo backend! Redirecionando...');
           
-          // Parar polling
-          // (será limpo pelo cleanup do useEffect)
+          // Parar polling imediatamente
+          if (interval) {
+            clearInterval(interval);
+            interval = null;
+          }
+          
+          // Verificar novamente antes de navegar
+          if (!isMounted) {
+            return;
+          }
           
           // Fechar modal
           onClose();
@@ -246,18 +271,20 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
           
           // Redirecionar para página de agradecimento
           setTimeout(() => {
-            try {
-              navigate('/thank-you', {
-                state: {
-                  items: items,
-                  transaction: umbrellaTransaction,
-                  paymentPending: false, // Pagamento confirmado
-                  transactionId: transactionId,
-                }
-              });
-            } catch (error) {
-              console.error('Erro ao navegar:', error);
-              window.location.href = '/thank-you';
+            if (isMounted) {
+              try {
+                navigate('/thank-you', {
+                  state: {
+                    items: items,
+                    transaction: umbrellaTransaction,
+                    paymentPending: false, // Pagamento confirmado pelo backend
+                    transactionId: transactionId,
+                  }
+                });
+              } catch (error) {
+                console.error('Erro ao navegar:', error);
+                window.location.href = '/thank-you';
+              }
             }
           }, 1000);
         } else if (data.status === 'EXPIRED') {
@@ -267,12 +294,18 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
             duration: 5000
           });
           // Parar polling se expirou
-          // (será limpo pelo cleanup do useEffect)
+          if (interval) {
+            clearInterval(interval);
+            interval = null;
+          }
         }
       } catch (error: any) {
         console.error('❌ Erro ao verificar status do pagamento:', error);
         // Não mostrar erro para o usuário, apenas logar
-        // Continuar tentando
+        // Continuar tentando apenas se componente ainda estiver montado
+        if (!isMounted) {
+          return;
+        }
       }
     };
 
@@ -280,12 +313,20 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
     checkPaymentStatus();
 
     // Configurar polling a cada 5 segundos
-    const interval = setInterval(checkPaymentStatus, 5000);
+    interval = setInterval(checkPaymentStatus, 5000);
 
-    // Cleanup: parar polling quando modal fechar ou transactionId mudar
+    // Cleanup: parar polling em TODOS os cenários possíveis
+    // 1. Modal fecha manualmente
+    // 2. Componente desmonta
+    // 3. transactionId muda
+    // 4. Navegação para outra página
     return () => {
-      console.log('🛑 Parando polling');
-      clearInterval(interval);
+      console.log('🛑 Cleanup: Parando polling (modal fechado/desmontado)');
+      isMounted = false; // Marcar como desmontado
+      if (interval) {
+        clearInterval(interval);
+        interval = null;
+      }
     };
   }, [isOpen, transactionId, pixCode, items, umbrellaTransaction, navigate, onClose, isFirstPurchase, markPurchaseCompleted]);
 

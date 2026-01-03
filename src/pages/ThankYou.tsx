@@ -22,6 +22,89 @@ const ThankYou = () => {
   const fullscreenVideoRef = useRef<HTMLVideoElement | null>(null);
   const [variantModalProduct, setVariantModalProduct] = useState<Product | null>(null);
   const [videoStates, setVideoStates] = useState<{ [key: string]: { isLiked: boolean; likesCount: number; sharesCount: number } }>({});
+  const [paymentStatus, setPaymentStatus] = useState<'checking' | 'paid' | 'pending' | 'expired' | 'error'>('checking');
+  const [transactionId, setTransactionId] = useState<string | null>(null);
+
+  // ⚠️ IMPORTANTE: Verificar status do pagamento quando página carregar (refresh-safe)
+  // Isso garante que mesmo após refresh ou acesso direto, o status seja validado pelo backend
+  useEffect(() => {
+    const verifyPaymentStatus = async () => {
+      // Obter transactionId do state ou localStorage
+      let txId: string | null = null;
+      
+      // Tentar obter do state (navegação direta)
+      if (location.state?.transactionId) {
+        txId = location.state.transactionId;
+      } else {
+        // Tentar obter do localStorage (refresh da página)
+        const savedOrder = localStorage.getItem('lastOrder');
+        if (savedOrder) {
+          try {
+            const order = JSON.parse(savedOrder);
+            txId = order.umbrellaTransactionId || order.transactionId || null;
+          } catch (e) {
+            console.error('Erro ao recuperar transactionId:', e);
+          }
+        }
+      }
+
+      if (!txId) {
+        console.warn('⚠️ TransactionId não encontrado, assumindo pagamento pendente');
+        setPaymentStatus('pending');
+        return;
+      }
+
+      setTransactionId(txId);
+
+      try {
+        // ⚠️ CRÍTICO: Consultar backend para verificar status real
+        // Nunca confiar apenas no frontend/localStorage
+        const response = await fetch(`/api/order-status?transactionId=${txId}`);
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+          console.error('❌ Erro ao verificar status:', data.error);
+          setPaymentStatus('error');
+          return;
+        }
+
+        console.log('✅ Status verificado pelo backend:', {
+          transactionId: txId,
+          status: data.status
+        });
+
+        // ⚠️ Backend é a fonte da verdade
+        if (data.status === 'PAID') {
+          setPaymentStatus('paid');
+        } else if (data.status === 'EXPIRED') {
+          setPaymentStatus('expired');
+          toast.error('O PIX expirou. Entre em contato com o suporte.', {
+            duration: 5000
+          });
+        } else {
+          // WAITING_PAYMENT ou outros
+          setPaymentStatus('pending');
+          // Se não está pago, redirecionar de volta para home
+          // (evita acesso indevido à página de agradecimento)
+          setTimeout(() => {
+            toast.warning('Pagamento ainda não confirmado. Redirecionando...', {
+              duration: 3000
+            });
+            navigate('/');
+          }, 3000);
+        }
+      } catch (error) {
+        console.error('❌ Erro ao verificar status do pagamento:', error);
+        setPaymentStatus('error');
+        // Em caso de erro, assumir pendente e redirecionar
+        setTimeout(() => {
+          navigate('/');
+        }, 3000);
+      }
+    };
+
+    verifyPaymentStatus();
+  }, [location.state, navigate]);
 
   useEffect(() => {
     try {
@@ -42,10 +125,12 @@ const ThankYou = () => {
       } else if (location.state?.items) {
         setPurchasedItems(location.state.items || []);
       } else {
-        // Se não houver dados, redirecionar para home após um delay
-        setTimeout(() => {
-          navigate('/');
-        }, 2000);
+        // Se não houver dados e status não for checking, redirecionar
+        if (paymentStatus !== 'checking') {
+          setTimeout(() => {
+            navigate('/');
+          }, 2000);
+        }
       }
     } catch (error) {
       console.error('Erro ao inicializar ThankYou:', error);
@@ -54,7 +139,7 @@ const ThankYou = () => {
         navigate('/');
       }, 1000);
     }
-  }, [location.state, navigate]);
+  }, [location.state, navigate, paymentStatus]);
 
   // Obter categorias dos produtos comprados
   const purchasedCategories = useMemo(() => {
@@ -332,10 +417,35 @@ const ThankYou = () => {
     );
   }
 
-  return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-muted/30">
-      <div className="max-w-7xl mx-auto px-4 py-6 md:py-8">
-        {/* Confirmação de Pagamento - Simples */}
+  // ⚠️ IMPORTANTE: Mostrar estado de verificação do pagamento
+  // Backend é a fonte da verdade - nunca confiar apenas no frontend
+  const renderPaymentStatus = () => {
+    if (paymentStatus === 'checking') {
+      return (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center mb-8"
+        >
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+            className="inline-flex items-center justify-center w-20 h-20 bg-primary/20 rounded-full mb-4"
+          >
+            <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full" />
+          </motion.div>
+          <h1 className="text-3xl md:text-4xl font-bold mb-2">
+            Verificando Pagamento...
+          </h1>
+          <p className="text-lg text-muted-foreground">
+            Aguarde enquanto confirmamos seu pagamento
+          </p>
+        </motion.div>
+      );
+    }
+
+    if (paymentStatus === 'pending' || paymentStatus === 'error') {
+      return (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -345,22 +455,84 @@ const ThankYou = () => {
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
-            className="inline-flex items-center justify-center w-20 h-20 bg-success/20 rounded-full mb-4"
+            className="inline-flex items-center justify-center w-20 h-20 bg-warning/20 rounded-full mb-4"
           >
-            <CheckCircle2 className="w-16 h-16 text-success" />
+            <X className="w-16 h-16 text-warning" />
           </motion.div>
-          
           <h1 className="text-3xl md:text-4xl font-bold mb-2">
-            Pagamento Confirmado!
+            Pagamento Não Confirmado
           </h1>
-          
           <p className="text-lg text-muted-foreground mb-2">
-            Pedido #{orderNumber} está sendo preparado
+            Seu pagamento ainda não foi confirmado pelo sistema
           </p>
           <p className="text-sm text-muted-foreground">
-            Você receberá atualizações por email
+            Redirecionando...
           </p>
         </motion.div>
+      );
+    }
+
+    if (paymentStatus === 'expired') {
+      return (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center mb-8"
+        >
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
+            className="inline-flex items-center justify-center w-20 h-20 bg-destructive/20 rounded-full mb-4"
+          >
+            <X className="w-16 h-16 text-destructive" />
+          </motion.div>
+          <h1 className="text-3xl md:text-4xl font-bold mb-2">
+            PIX Expirado
+          </h1>
+          <p className="text-lg text-muted-foreground mb-2">
+            O código PIX expirou
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Redirecionando...
+          </p>
+        </motion.div>
+      );
+    }
+
+    // paymentStatus === 'paid' (confirmado pelo backend)
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="text-center mb-8"
+      >
+        <motion.div
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
+          className="inline-flex items-center justify-center w-20 h-20 bg-success/20 rounded-full mb-4"
+        >
+          <CheckCircle2 className="w-16 h-16 text-success" />
+        </motion.div>
+        <h1 className="text-3xl md:text-4xl font-bold mb-2">
+          Pagamento Confirmado!
+        </h1>
+        <p className="text-lg text-muted-foreground mb-2">
+          Pedido #{orderNumber} está sendo preparado
+        </p>
+        <p className="text-sm text-muted-foreground">
+          Você receberá atualizações por email
+        </p>
+      </motion.div>
+    );
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-background to-muted/30">
+      <div className="max-w-7xl mx-auto px-4 py-6 md:py-8">
+        {/* Confirmação de Pagamento - Verificação pelo Backend */}
+        {renderPaymentStatus()}
 
         {/* Oportunidade Exclusiva */}
         <motion.div
