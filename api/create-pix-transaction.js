@@ -43,7 +43,7 @@ export default async function handler(req, res) {
     const { customer, items, totalPrice, metadata } = req.body;
 
     // Validar dados obrigatórios
-    if (!customerInfo || !customerInfo.name || !customerInfo.cpf) {
+    if (!customer || !customer.name || !customer.cpf) {
       return res.status(400).json({
         success: false,
         error: 'Dados do cliente incompletos. Nome e CPF são obrigatórios.'
@@ -69,21 +69,21 @@ export default async function handler(req, res) {
     const orderId = metadata?.orderId || `ORDER-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
 
     // Normalizar CPF (só números)
-    const normalizedCPF = customerInfo.cpf.replace(/\D/g, '');
+    const normalizedCPF = customer.cpf.replace(/\D/g, '');
     
     // Normalizar valor do PIX (CRÍTICO) - Evitar 4.473000000000001
     const normalizedPrice = Number(Number(totalPrice).toFixed(2));
     const amountInCents = Math.round(normalizedPrice * 100);
 
     // Normalizar telefone (só números, mínimo 10 dígitos)
-    const normalizedPhone = customerInfo.phone?.replace(/\D/g, '') || '11999999999';
+    const normalizedPhone = customer.phone?.replace(/\D/g, '') || '11999999999';
     const phone = normalizedPhone.length >= 10 ? normalizedPhone : '11999999999';
 
     // Preparar customer para UmbrellaPag
     const umbrellaCustomer = {
-      name: customerInfo.name,
+      name: customer.name,
       phone: phone,
-      email: customerInfo.email || `cliente${normalizedCPF.substring(0, 6)}@exemplo.com`,
+      email: customer.email || `cliente${normalizedCPF.substring(0, 6)}@exemplo.com`,
       document: {
         type: 'CPF',
         number: normalizedCPF
@@ -201,7 +201,7 @@ export default async function handler(req, res) {
     if (transactionId && supabase) {
       try {
         // Normalizar CPF para buscar cliente
-        const normalizedCPFForDB = customerInfo.cpf.replace(/\D/g, '');
+        const normalizedCPFForDB = customer.cpf.replace(/\D/g, '');
         
         // Preparar dados do pedido
         const orderData = {
