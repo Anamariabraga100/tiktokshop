@@ -3,7 +3,7 @@
 // ESM PURO - package.json tem "type": "module"
 
 // ==========================================
-// 🧪 TESTE: Endpoint está carregando?
+// 🧪 CAMADA 1: Testar se ENV está carregando
 // ==========================================
 export default async function handler(req, res) {
   try {
@@ -17,11 +17,14 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true });
     }
 
-    // TESTE: Retornar JSON simples para confirmar que carregou
+    // TESTE: Verificar se ENV está chegando
     return res.status(200).json({
       ok: true,
-      step: 'create-pix-loaded',
-      message: 'Endpoint carregou com sucesso!',
+      envLoaded: !!process.env.UMBRELLAPAG_API_KEY,
+      keyPreview: process.env.UMBRELLAPAG_API_KEY
+        ? process.env.UMBRELLAPAG_API_KEY.slice(0, 6) + '...'
+        : null,
+      alsoChecking: !!process.env.VITE_UMBRELLAPAG_API_KEY,
       method: req.method,
       timestamp: new Date().toISOString()
     });
