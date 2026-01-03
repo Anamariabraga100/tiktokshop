@@ -60,6 +60,10 @@ export default async function handler(req, res) {
       });
     }
 
+    // Gerar externalRef consistente (ID do pedido)
+    // Usar metadata.orderId se fornecido, senão gerar um único
+    const orderId = metadata?.orderId || `ORDER-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+
     // Normalizar CPF (só números)
     const normalizedCPF = customer.cpf.replace(/\D/g, '');
     
@@ -102,6 +106,9 @@ export default async function handler(req, res) {
                     '127.0.0.1';
 
     // Montar payload para UmbrellaPag
+    const postbackUrl = process.env.VITE_POSTBACK_URL || 
+                        `https://${req.headers.host}/api/webhook-umbrellapag`;
+    
     const payload = {
       amount: amountInCents, // em centavos
       currency: 'BRL',
@@ -111,17 +118,23 @@ export default async function handler(req, res) {
       pix: {
         expiresInDays: 1
       },
-      // Postback URL para webhook (quando configurado)
-      postbackUrl: process.env.VITE_POSTBACK_URL || undefined,
-      // Metadata opcional
-      metadata: metadata ? JSON.stringify(metadata) : undefined
+      // ExternalRef = ID do pedido (obrigatório para conciliação)
+      externalRef: orderId,
+      // Postback URL para webhook
+      postbackUrl: postbackUrl,
+      // Metadata com orderId
+      metadata: JSON.stringify({
+        orderId: orderId,
+        ...metadata
+      })
     };
 
     console.log('🚀 Criando PIX:', {
       amount: amountInCents,
       customer: umbrellaCustomer.name,
       itemsCount: umbrellaItems.length,
-      document: normalizedCPF.substring(0, 3) + '***'
+      document: normalizedCPF.substring(0, 3) + '***',
+      externalRef: orderId
     });
 
     // Chamar API UmbrellaPag
@@ -186,7 +199,8 @@ export default async function handler(req, res) {
       data: {
         id: transactionData?.transactionId || transactionData?.id,
         transactionId: transactionData?.transactionId || transactionData?.id,
-        externalRef: transactionData?.externalRef,
+        externalRef: transactionData?.externalRef || orderId,
+        orderId: orderId, // ID do pedido interno
         status: transactionData?.status,
         amount: transactionData?.amount,
         qrCode: qrCode,

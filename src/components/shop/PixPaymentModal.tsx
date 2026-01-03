@@ -23,6 +23,7 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
   const [isProcessing, setIsProcessing] = useState(false);
   const [pixCode, setPixCode] = useState<string>('');
   const [umbrellaTransaction, setUmbrellaTransaction] = useState<any>(null);
+  const [transactionCreated, setTransactionCreated] = useState(false); // Proteção contra múltiplos cliques
   const navigate = useNavigate();
 
   // Calcular valor final com desconto PIX de 10% (simulação)
@@ -48,10 +49,12 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
 
   // Criar transação PIX no UmbrellaPag quando o modal abrir
   useEffect(() => {
-    if (isOpen && customerData && items.length > 0 && !pixCode && !isProcessing) {
+    // Proteção contra múltiplos cliques: só criar se não foi criada ainda
+    if (isOpen && customerData && items.length > 0 && !pixCode && !isProcessing && !transactionCreated) {
       const createTransaction = async () => {
         try {
           setIsProcessing(true);
+          setTransactionCreated(true); // Marcar que está criando
           
           // Validar dados do cliente antes de criar transação (validação rigorosa)
           const cpfNormalized = customerData.cpf?.replace(/\D/g, '') || '';
@@ -147,6 +150,7 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
           }
         } catch (error: any) {
           console.error('❌ Erro ao criar transação PIX:', error);
+          setTransactionCreated(false); // Resetar em caso de erro para permitir nova tentativa
           
           let errorMessage = 'Erro ao criar transação PIX. Tente novamente.';
           
