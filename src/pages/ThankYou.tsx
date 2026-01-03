@@ -97,22 +97,18 @@ const ThankYou = () => {
         } else {
           // WAITING_PAYMENT ou outros
           setPaymentStatus('pending');
-          // Se não está pago, redirecionar de volta para home
-          // (evita acesso indevido à página de agradecimento)
-          setTimeout(() => {
-            toast.warning('Pagamento ainda não confirmado. Redirecionando...', {
-              duration: 3000
-            });
-            navigate('/');
-          }, 3000);
+          // Mostrar aviso mas não redirecionar (permite acesso direto)
+          toast.info('Pagamento ainda não confirmado.', {
+            duration: 5000
+          });
         }
       } catch (error) {
         console.error('❌ Erro ao verificar status do pagamento:', error);
         setPaymentStatus('error');
-        // Em caso de erro, assumir pendente e redirecionar
-        setTimeout(() => {
-          navigate('/');
-        }, 3000);
+        // Em caso de erro, apenas mostrar aviso (permite acesso direto)
+        toast.error('Erro ao verificar status do pagamento.', {
+          duration: 5000
+        });
       }
     };
 
@@ -179,19 +175,13 @@ const ThankYou = () => {
         console.log('✅ Itens válidos recuperados:', validItems.length);
         setPurchasedItems(validItems);
       } else {
-        // Se não houver dados e status não for checking, redirecionar
-        if (paymentStatus !== 'checking') {
-          setTimeout(() => {
-            navigate('/');
-          }, 2000);
-        }
+        // Se não houver dados, apenas definir array vazio (permite acesso direto)
+        setPurchasedItems([]);
       }
     } catch (error) {
       console.error('Erro ao inicializar ThankYou:', error);
-      // Em caso de erro, redirecionar para home
-      setTimeout(() => {
-        navigate('/');
-      }, 1000);
+      // Em caso de erro, apenas definir array vazio (permite acesso direto)
+      setPurchasedItems([]);
     }
   }, [location.state, navigate, paymentStatus]);
 
