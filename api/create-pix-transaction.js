@@ -3,8 +3,8 @@
 // ESM PURO - package.json tem "type": "module"
 
 // ==========================================
-// 🧪 CAMADA 2: Dry-run do UmbrellaPag (testar comunicação)
-// URL CORRETA: https://api-gateway.umbrellapag.com/api/user/transactions
+// 🎯 CAMADA 3: Criar PIX real com payload mínimo válido
+// URL: https://api-gateway.umbrellapag.com/api/user/transactions
 // ==========================================
 
 const BASE_URL = 'https://api-gateway.umbrellapag.com/api';
@@ -22,18 +22,36 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true });
     }
 
-    // DRY-RUN: Testar comunicação com UmbrellaPag
+    // Verificar API Key
     const API_KEY = process.env.UMBRELLAPAG_API_KEY;
     
     if (!API_KEY) {
       return res.status(500).json({
         ok: false,
-        step: 'umbrella-dry-run',
+        success: false,
         error: 'UMBRELLAPAG_API_KEY não configurada'
       });
     }
 
-    // Testar conexão com POST e body mínimo
+    // Payload mínimo válido para teste
+    const payload = {
+      amount: Number(Number(49.90).toFixed(2)),
+      paymentMethod: 'PIX',
+      description: 'Pedido teste PIX',
+      customer: {
+        name: 'Cliente Teste',
+        document: '12345678909', // CPF só números
+        email: 'cliente@teste.com'
+      }
+    };
+
+    console.log('🚀 Criando PIX real:', {
+      amount: payload.amount,
+      customer: payload.customer.name,
+      document: payload.customer.document.substring(0, 3) + '***'
+    });
+
+    // Chamar API UmbrellaPag
     const response = await fetch(ENDPOINT, {
       method: 'POST',
       headers: {
@@ -41,7 +59,7 @@ export default async function handler(req, res) {
         'User-Agent': 'UMBRELLAB2B/1.0',
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({}) // body mínimo só para testar conexão
+      body: JSON.stringify(payload)
     });
 
     const text = await response.text();
@@ -53,21 +71,25 @@ export default async function handler(req, res) {
       data = { raw: text.substring(0, 500) };
     }
 
-    return res.status(response.status).json({
-      ok: true,
-      step: 'umbrella-dry-run',
+    console.log('📥 Resposta UmbrellaPag:', {
       status: response.status,
-      statusText: response.statusText,
-      data,
-      endpoint: ENDPOINT
+      hasData: !!data,
+      hasPixCode: !!(data?.pix?.qrCode || data?.qrCode || data?.copyPaste)
     });
+
+    return res.status(response.status).json({
+      ok: response.ok,
+      success: response.ok,
+      status: response.status,
+      data
+    });
+
   } catch (err) {
-    console.error('❌ Umbrella dry-run error:', err);
+    console.error('❌ PIX error:', err);
     return res.status(500).json({
       ok: false,
-      step: 'umbrella-dry-run',
-      error: err.message,
-      endpoint: ENDPOINT
+      success: false,
+      error: err.message
     });
   }
 }
