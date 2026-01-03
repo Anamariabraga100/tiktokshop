@@ -242,17 +242,19 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
         // ⚠️ IMPORTANTE: Status vem do backend (fonte da verdade)
         // Se pagamento foi confirmado, redirecionar
         if (data.status === 'PAID') {
-          console.log('✅ Pagamento confirmado pelo backend! Redirecionando...');
+          console.log('✅✅✅ PAGAMENTO CONFIRMADO - INICIANDO REDIRECIONAMENTO ✅✅✅');
           
           // Parar polling imediatamente
           if (interval) {
             clearInterval(interval);
             interval = null;
+            console.log('🛑 Polling parado');
           }
           
           // Marcar compra como concluída se for primeira compra
           if (isFirstPurchase()) {
             markPurchaseCompleted();
+            console.log('✅ Primeira compra marcada como concluída');
           }
           
           // Preparar dados para navegação
@@ -266,33 +268,67 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
           // Salvar state no sessionStorage ANTES de navegar (garantir que dados estejam disponíveis)
           try {
             sessionStorage.setItem('thankYouState', JSON.stringify(navigationState));
-            // Também salvar flag no localStorage como backup
             localStorage.setItem('paymentConfirmed', 'true');
             localStorage.setItem('paymentConfirmedTransactionId', transactionId || '');
-            console.log('✅ State salvo no sessionStorage:', { transactionId, itemsCount: items.length });
+            console.log('✅✅✅ DADOS SALVOS:', { 
+              transactionId, 
+              itemsCount: items.length,
+              sessionStorage: 'OK',
+              localStorage: 'OK'
+            });
           } catch (storageError) {
-            console.error('⚠️ Erro ao salvar state no sessionStorage:', storageError);
+            console.error('❌ Erro ao salvar dados:', storageError);
           }
-          
-          // Mostrar toast de sucesso (não bloquear navegação)
-          toast.success('Pagamento confirmado! Redirecionando...', {
-            id: 'payment-confirmed',
-            duration: 2000
-          });
-          
-          // Navegar IMEDIATAMENTE usando window.location.replace (mais confiável, não permite voltar)
-          // Não chamar onPaymentComplete aqui pois fecha o drawer e pode interferir
-          // O carrinho será limpo na página ThankYou se necessário
-          console.log('🚀 Redirecionando para /thank-you...');
           
           // Marcar isMounted como false para evitar que o cleanup interfira
           isMounted = false;
+          console.log('✅ isMounted = false');
           
-          // Navegar imediatamente - usar replace para não permitir voltar
-          // Usar setTimeout 0 para garantir que o código execute antes de qualquer cleanup
-          setTimeout(() => {
+          // Mostrar toast de sucesso
+          toast.success('Pagamento confirmado! Redirecionando...', {
+            id: 'payment-confirmed',
+            duration: 1000
+          });
+          
+          // TESTE: Múltiplas tentativas de redirecionamento
+          console.log('🚀 TENTATIVA 1: window.location.replace');
+          try {
             window.location.replace('/thank-you');
-          }, 0);
+            console.log('✅ window.location.replace executado');
+          } catch (error) {
+            console.error('❌ Erro em window.location.replace:', error);
+          }
+          
+          // Fallback 1: window.location.href
+          setTimeout(() => {
+            console.log('🚀 TENTATIVA 2: window.location.href (fallback)');
+            if (window.location.pathname !== '/thank-you') {
+              window.location.href = '/thank-you';
+            }
+          }, 100);
+          
+          // Fallback 2: navigate do React Router
+          setTimeout(() => {
+            console.log('🚀 TENTATIVA 3: navigate (fallback)');
+            if (window.location.pathname !== '/thank-you') {
+              try {
+                navigate('/thank-you', { 
+                  state: navigationState,
+                  replace: true 
+                });
+              } catch (error) {
+                console.error('❌ Erro em navigate:', error);
+              }
+            }
+          }, 200);
+          
+          // Fallback 3: Último recurso
+          setTimeout(() => {
+            console.log('🚀 TENTATIVA 4: Último recurso - window.location');
+            if (window.location.pathname !== '/thank-you') {
+              window.location = '/thank-you' as any;
+            }
+          }, 300);
         } else if (data.status === 'EXPIRED') {
           console.warn('⏰ PIX expirado');
           toast.error('O PIX expirou. Gere um novo código.', {
