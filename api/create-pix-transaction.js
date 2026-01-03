@@ -26,8 +26,19 @@ const handler = async (req, res) => {
       });
     }
 
-    // Handler principal
-    try {
+    // ==========================================
+    // 🧪 CAMADA 1 - TESTE: Endpoint está vivo?
+    // ==========================================
+    // TEMPORÁRIO: Retornar JSON simples para testar se o endpoint funciona
+    return res.status(200).json({
+      ok: true,
+      step: 'backend-alive',
+      message: 'Endpoint está funcionando!'
+    });
+    // ==========================================
+
+    // Handler principal (COMENTADO TEMPORARIAMENTE PARA TESTE)
+    /* try {
       const { customer, items, totalPrice, metadata } = req.body;
 
       console.log('📥 Dados recebidos:', {
@@ -273,6 +284,7 @@ const handler = async (req, res) => {
         data: null,
       });
     }
+    */ // FIM DO CÓDIGO COMENTADO PARA TESTE
 
   } catch (outerError) {
     // CATCH GLOBAL - Garantir que SEMPRE retornamos JSON válido
