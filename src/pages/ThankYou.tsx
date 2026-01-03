@@ -128,20 +128,29 @@ const ThankYou = () => {
       // Recuperar itens comprados (prioridade: state > sessionStorage > localStorage)
       let itemsToSet: CartItem[] = [];
       
+      console.log('🔍 Tentando recuperar itens:', {
+        hasLocationState: !!location.state?.items,
+        hasSessionStorage: !!sessionStorage.getItem('thankYouState'),
+        hasLocalStorage: !!localStorage.getItem('lastOrder')
+      });
+      
       if (location.state?.items) {
         // Primeiro: tentar do state (navegação com React Router)
+        console.log('✅ Recuperando do location.state');
         itemsToSet = location.state.items || [];
       } else {
         // Segundo: tentar do sessionStorage (fallback para window.location.href)
         const sessionState = sessionStorage.getItem('thankYouState');
         if (sessionState) {
           try {
+            console.log('✅ Recuperando do sessionStorage');
             const parsed = JSON.parse(sessionState);
             itemsToSet = parsed.items || [];
+            console.log('📦 Itens do sessionStorage:', itemsToSet.length, itemsToSet);
             // Limpar sessionStorage após ler
             sessionStorage.removeItem('thankYouState');
           } catch (e) {
-            console.error('Erro ao recuperar state do sessionStorage:', e);
+            console.error('❌ Erro ao recuperar state do sessionStorage:', e);
           }
         }
         
@@ -150,17 +159,25 @@ const ThankYou = () => {
           const savedOrder = localStorage.getItem('lastOrder');
           if (savedOrder) {
             try {
+              console.log('✅ Recuperando do localStorage');
               const order = JSON.parse(savedOrder);
               itemsToSet = order.items || [];
+              console.log('📦 Itens do localStorage:', itemsToSet.length, itemsToSet);
             } catch (e) {
-              console.error('Erro ao recuperar pedido:', e);
+              console.error('❌ Erro ao recuperar pedido:', e);
             }
           }
         }
       }
       
-      if (itemsToSet.length > 0) {
-        setPurchasedItems(itemsToSet);
+      // Validar e filtrar apenas itens válidos com id
+      const validItems = Array.isArray(itemsToSet) 
+        ? itemsToSet.filter(item => item && typeof item === 'object' && item.id)
+        : [];
+      
+      if (validItems.length > 0) {
+        console.log('✅ Itens válidos recuperados:', validItems.length);
+        setPurchasedItems(validItems);
       } else {
         // Se não houver dados e status não for checking, redirecionar
         if (paymentStatus !== 'checking') {
@@ -180,9 +197,12 @@ const ThankYou = () => {
 
   // Obter categorias dos produtos comprados
   const purchasedCategories = useMemo(() => {
+    if (!purchasedItems || purchasedItems.length === 0) {
+      return [];
+    }
     const categories = new Set<string>();
     purchasedItems.forEach(item => {
-      if (item.category) {
+      if (item && item.category) {
         categories.add(item.category);
       }
     });
@@ -192,7 +212,9 @@ const ThankYou = () => {
   // Produtos relacionados (mesma categoria dos comprados)
   // Sempre mostrar pelo menos 8 produtos
   const relatedProducts = useMemo(() => {
-    const purchasedIds = new Set(purchasedItems.map(item => item.id));
+    // Validar e filtrar apenas itens válidos com id
+    const validItems = purchasedItems.filter(item => item && item.id);
+    const purchasedIds = new Set(validItems.map(item => item.id));
     let related: Product[] = [];
     
     // Primeiro, tentar pegar produtos da mesma categoria
@@ -228,7 +250,9 @@ const ThankYou = () => {
   // Vídeos do criador (pegar vídeos de produtos relacionados)
   const creatorVideos = useMemo(() => {
     const videos: Array<{ product: Product; video: CreatorVideo }> = [];
-    const purchasedIds = new Set(purchasedItems.map(item => item.id));
+    // Validar e filtrar apenas itens válidos com id
+    const validItems = purchasedItems.filter(item => item && item.id);
+    const purchasedIds = new Set(validItems.map(item => item.id));
     
     // Primeiro, pegar produtos com mais vídeos (priorizar Kit Barbeador que tem 6 vídeos)
     // Ordenar por: quantidade de vídeos (desc), depois por soldCount (desc)
@@ -444,11 +468,19 @@ const ThankYou = () => {
     : null;
 
   // Se não houver itens comprados, mostrar loading ou redirecionar
-  if (purchasedItems.length === 0 && !orderNumber) {
+  // Mas se o pagamento foi confirmado, mostrar a página mesmo sem itens (eles podem estar carregando)
+  if (purchasedItems.length === 0 && !orderNumber && paymentStatus !== 'paid') {
     return (
       <div className="min-h-screen bg-gradient-to-b from-background to-muted/30 flex items-center justify-center">
         <div className="text-center">
-          <p className="text-muted-foreground">Carregando...</p>
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+            className="inline-flex items-center justify-center w-16 h-16 bg-primary/20 rounded-full mb-4"
+          >
+            <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full" />
+          </motion.div>
+          <p className="text-muted-foreground">Carregando informações do pedido...</p>
         </div>
       </div>
     );
