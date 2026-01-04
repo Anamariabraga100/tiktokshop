@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Copy, Check, QrCode } from 'lucide-react';
+import { X, Copy, Check, QrCode, Clock } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -194,6 +194,7 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
           
           if (qrCode) {
             setPixCode(qrCode);
+            setIsProcessing(false); // QR Code gerado, não está mais processando
             console.log('✅ QR Code obtido com sucesso');
           } else {
             // Tentar obter o QR Code da URL segura ou outros campos
@@ -707,10 +708,10 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
                 </button>
                 <button
                   onClick={handlePaymentComplete}
-                  disabled={isProcessing || !pixCode || !umbrellaTransaction}
+                  disabled={(isProcessing && !pixCode) || !pixCode || !umbrellaTransaction}
                   className="flex-1 py-3 bg-gradient-to-r from-tiktok-pink to-primary text-white rounded-full font-semibold hover:opacity-90 transition-opacity flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isProcessing ? (
+                  {isProcessing && !pixCode ? (
                     <>
                       <motion.div
                         animate={{ rotate: 360 }}
@@ -718,6 +719,11 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
                         className="w-4 h-4 border-2 border-white border-t-transparent rounded-full"
                       />
                       <span>Processando...</span>
+                    </>
+                  ) : pixCode ? (
+                    <>
+                      <Clock className="w-4 h-4" />
+                      <span>Aguardando pagamento PIX</span>
                     </>
                   ) : (
                     <span>Confirmar pedido</span>
