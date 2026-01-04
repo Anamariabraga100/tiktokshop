@@ -13,6 +13,16 @@ import { VariantSelectorModal } from '@/components/shop/VariantSelectorModal';
 import { shareContent } from '@/utils/share';
 import { trackPurchase } from '@/lib/facebookPixel';
 
+interface Order {
+  orderNumber: string;
+  items: CartItem[];
+  totalPrice: number;
+  paymentMethod: string;
+  date: string;
+  status: string;
+  cpf: string | null;
+}
+
 const ThankYou = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -242,6 +252,62 @@ const ThankYou = () => {
           } : undefined,
         }
       );
+
+      // ⚠️ IMPORTANTE: Salvar pedido no localStorage para aparecer na página de Pedidos
+      if (customerData?.cpf) {
+        try {
+          const normalizedCPF = customerData.cpf.replace(/\D/g, '');
+          const ordersKey = `orders_${normalizedCPF}`;
+          
+          // Obter pedidos existentes
+          const existingOrdersJson = localStorage.getItem(ordersKey);
+          const existingOrders = existingOrdersJson ? JSON.parse(existingOrdersJson) : [];
+          
+          // Verificar se pedido já existe (evitar duplicatas)
+          const orderExists = existingOrders.some((order: Order) => order.orderNumber === orderNumber);
+          
+          if (!orderExists) {
+            // Criar objeto do pedido no formato esperado pela página de Pedidos
+            const orderData: Order = {
+              orderNumber: orderNumber,
+              items: purchasedItems,
+              totalPrice: totalValue,
+              paymentMethod: 'pix',
+              date: new Date().toISOString(),
+              status: 'em_preparacao', // Status inicial após pagamento confirmado
+              cpf: normalizedCPF,
+            };
+            
+            // Adicionar novo pedido
+            existingOrders.push(orderData);
+            
+            // Salvar de volta no localStorage
+            localStorage.setItem(ordersKey, JSON.stringify(existingOrders));
+            
+            // Também salvar como último pedido (compatibilidade)
+            localStorage.setItem('lastOrder', JSON.stringify({
+              orderNumber: orderNumber,
+              items: purchasedItems,
+              totalPrice: totalValue,
+              paymentMethod: 'pix',
+              date: new Date().toISOString(),
+              status: 'em_preparacao',
+              cpf: normalizedCPF,
+              umbrellaTransactionId: transactionId,
+            }));
+            
+            console.log('✅ Pedido salvo no localStorage para página de Pedidos:', {
+              orderNumber,
+              ordersKey,
+              totalOrders: existingOrders.length
+            });
+          } else {
+            console.log('ℹ️ Pedido já existe no localStorage, não duplicando');
+          }
+        } catch (error) {
+          console.error('❌ Erro ao salvar pedido no localStorage:', error);
+        }
+      }
     } else {
       if (paymentStatus !== 'paid') {
         console.log('⏳ Aguardando paymentStatus = paid. Status atual:', paymentStatus);

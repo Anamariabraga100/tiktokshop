@@ -25,24 +25,76 @@ export const Orders = ({ onProductClick, onGoToShop }: OrdersProps) => {
   const { customerData } = useCustomer();
   const [orders, setOrders] = useState<Order[]>([]);
 
-  // Carregar pedidos do CPF atual
+  // Carregar pedidos do CPF atual (do Supabase E localStorage)
   useEffect(() => {
-    if (customerData?.cpf) {
-      const ordersKey = `orders_${customerData.cpf}`;
-      const savedOrders = localStorage.getItem(ordersKey);
-      if (savedOrders) {
-        try {
-          const parsedOrders = JSON.parse(savedOrders);
-          // Ordenar por data (mais recente primeiro)
-          const sortedOrders = parsedOrders.sort((a: Order, b: Order) => 
-            new Date(b.date).getTime() - new Date(a.date).getTime()
-          );
-          setOrders(sortedOrders);
-        } catch (error) {
-          console.error('Erro ao carregar pedidos:', error);
-        }
+    const loadOrders = async () => {
+      if (!customerData?.cpf) {
+        setOrders([]);
+        return;
       }
-    }
+
+      const normalizedCPF = customerData.cpf.replace(/\D/g, '');
+      const allOrders: Order[] = [];
+
+      // 1. Carregar do Supabase (fonte principal)
+      try {
+        const { getOrdersFromSupabase } = await import('@/lib/supabase');
+        const supabaseOrders = await getOrdersFromSupabase(normalizedCPF);
+        
+        // Converter pedidos do Supabase para formato Order
+        const convertedOrders = supabaseOrders.map((order: any) => ({
+          orderNumber: order.order_number,
+          items: order.items || [],
+          totalPrice: order.total_price || 0,
+          paymentMethod: order.payment_method || 'pix',
+          date: order.created_at || order.updated_at || new Date().toISOString(),
+          status: order.status || order.umbrella_status || 'aguardando_pagamento',
+          cpf: order.customer_cpf,
+        }));
+        
+        allOrders.push(...convertedOrders);
+        console.log(`✅ Carregados ${convertedOrders.length} pedidos do Supabase`);
+      } catch (error) {
+        console.error('Erro ao carregar pedidos do Supabase:', error);
+      }
+
+      // 2. Carregar do localStorage (fallback/compatibilidade)
+      try {
+        const ordersKey = `orders_${normalizedCPF}`;
+        const savedOrders = localStorage.getItem(ordersKey);
+        if (savedOrders) {
+          const parsedOrders = JSON.parse(savedOrders);
+          
+          // Adicionar apenas pedidos que não estão no Supabase (evitar duplicatas)
+          parsedOrders.forEach((localOrder: Order) => {
+            const existsInSupabase = allOrders.some(
+              supabaseOrder => supabaseOrder.orderNumber === localOrder.orderNumber
+            );
+            if (!existsInSupabase) {
+              allOrders.push(localOrder);
+            }
+          });
+          
+          console.log(`✅ Carregados ${parsedOrders.length} pedidos do localStorage`);
+        }
+      } catch (error) {
+        console.error('Erro ao carregar pedidos do localStorage:', error);
+      }
+
+      // 3. Ordenar por data (mais recente primeiro) e remover duplicatas
+      const uniqueOrders = Array.from(
+        new Map(allOrders.map(order => [order.orderNumber, order])).values()
+      );
+      
+      const sortedOrders = uniqueOrders.sort((a: Order, b: Order) => 
+        new Date(b.date).getTime() - new Date(a.date).getTime()
+      );
+      
+      setOrders(sortedOrders);
+      console.log(`✅ Total de ${sortedOrders.length} pedidos carregados`);
+    };
+
+    loadOrders();
   }, [customerData?.cpf]);
 
   // Selecionar alguns produtos recomendados aleatórios ou populares

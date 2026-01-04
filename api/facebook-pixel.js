@@ -249,10 +249,14 @@ export default async function handler(req, res) {
       action_source: 'website',
     };
     
-    // Adicionar event_source_url apenas se disponível
-    const sourceUrl = eventData?.sourceUrl || req.headers.referer;
+    // ⚠️ CRÍTICO: event_source_url é OBRIGATÓRIO para atribuição de campanha
+    // Sem isso, o Facebook não consegue atribuir a conversão à campanha
+    const sourceUrl = eventData?.sourceUrl || req.headers.referer || req.headers.origin || 'https://' + (req.headers.host || '');
     if (sourceUrl) {
       eventPayload.event_source_url = sourceUrl;
+      console.log('📎 event_source_url definido:', sourceUrl);
+    } else {
+      console.warn('⚠️ event_source_url não disponível - pode afetar atribuição de campanha');
     }
     
     // Adicionar test_event_code se configurado

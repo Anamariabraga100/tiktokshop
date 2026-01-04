@@ -79,10 +79,33 @@ export async function trackFacebookEvent(
     }
     
     // Tentar obter fbp (Facebook Browser ID) do cookie
-    const fbp = getCookie('_fbp') || '';
+    // Formato: fb.1.1234567890.1234567890
+    let fbp = getCookie('_fbp') || '';
+    
+    // Se não tiver _fbp, tentar criar um (para melhor atribuição)
+    if (!fbp) {
+      // Gerar fbp se não existir (formato: fb.1.timestamp.random)
+      const timestamp = Date.now();
+      const random = Math.floor(Math.random() * 1000000000);
+      fbp = `fb.1.${timestamp}.${random}`;
+      // Salvar no cookie para reutilizar
+      document.cookie = `_fbp=${fbp}; expires=${new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toUTCString()}; path=/`;
+    }
     
     // Tentar obter fbc (Facebook Click ID) do cookie ou URL
-    const fbc = getCookie('_fbc') || getFbcFromUrl() || '';
+    // Formato: fb.1.timestamp.fbclid
+    let fbc = getCookie('_fbc') || getFbcFromUrl() || '';
+    
+    // Se não tiver _fbc mas tiver fbclid na URL, criar
+    if (!fbc) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const fbclid = urlParams.get('fbclid');
+      if (fbclid) {
+        fbc = `fb.1.${Date.now()}.${fbclid}`;
+        // Salvar no cookie para reutilizar
+        document.cookie = `_fbc=${fbc}; expires=${new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toUTCString()}; path=/`;
+      }
+    }
 
     // Preparar dados do usuário
     // IMPORTANTE: clientUserAgent é sempre enviado (obrigatório para Facebook)
