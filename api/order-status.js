@@ -51,18 +51,29 @@ export default async function handler(req, res) {
           status: order.status
         });
 
-        // ⚠️ MELHORIA: Se status no banco é WAITING_PAYMENT, verificar gateway também
+        // ⚠️ CRÍTICO: Sempre verificar gateway quando status no banco é WAITING_PAYMENT
         // Isso garante que mesmo se o webhook falhar, o polling detecta o pagamento
         const dbStatus = order.umbrella_status || order.status;
         const isWaitingPayment = dbStatus === 'WAITING_PAYMENT' || 
                                  dbStatus === 'waiting_payment' || 
-                                 dbStatus === 'aguardando_pagamento';
+                                 dbStatus === 'aguardando_pagamento' ||
+                                 dbStatus === 'WAITING' ||
+                                 !dbStatus;
 
-        // Se está aguardando pagamento, verificar gateway em paralelo
+        // ⚠️ SEMPRE verificar gateway se está aguardando pagamento
+        // Isso é crítico porque o webhook pode não ser chamado
         if (isWaitingPayment) {
           try {
             const API_KEY = process.env.UMBRELLAPAG_API_KEY;
             if (API_KEY) {
+              console.log('🔍 Verificando gateway para transactionId:', transactionId);
+              
+              console.log('🔍 Consultando gateway UmbrellaPag:', {
+                url: `${BASE_URL}/user/transactions/${transactionId}`,
+                transactionId: transactionId.substring(0, 8) + '...',
+                hasApiKey: !!API_KEY
+              });
+
               const gatewayResponse = await fetch(`${BASE_URL}/user/transactions/${transactionId}`, {
                 method: 'GET',
                 headers: {
@@ -72,25 +83,106 @@ export default async function handler(req, res) {
                 }
               });
 
-              if (gatewayResponse.ok) {
-                const gatewayData = await gatewayResponse.json();
-                const gatewayTransaction = gatewayData?.data || gatewayData;
-                const gatewayStatus = gatewayTransaction?.status;
+              console.log('📥 Resposta do gateway:', {
+                status: gatewayResponse.status,
+                statusText: gatewayResponse.statusText,
+                ok: gatewayResponse.ok,
+                headers: Object.fromEntries(gatewayResponse.headers.entries())
+              });
 
-                // Se gateway mostra PAID mas banco não, atualizar banco automaticamente
-                if (gatewayStatus === 'PAID' && dbStatus !== 'PAID') {
-                  console.log('🔄 Gateway mostra PAID mas banco não. Atualizando banco automaticamente...');
+              if (gatewayResponse.ok) {
+                const responseText = await gatewayResponse.text();
+                console.log('📋 Resposta raw do gateway:', responseText.substring(0, 500));
+                
+                let gatewayData;
+                try {
+                  gatewayData = JSON.parse(responseText);
+                } catch (parseError) {
+                  console.error('❌ Erro ao parsear resposta do gateway:', parseError);
+                  console.error('📋 Resposta completa:', responseText);
+                  throw new Error('Resposta do gateway não é JSON válido');
+                }
+
+                console.log('📊 Dados parseados do gateway:', JSON.stringify(gatewayData, null, 2));
+
+                // A resposta pode vir em diferentes formatos:
+                // 1. { data: { ... } }
+                // 2. { transaction: { ... } }
+                // 3. { ... } (dados diretos)
+                const gatewayTransaction = gatewayData?.data || 
+                                          gatewayData?.transaction || 
+                                          gatewayData;
+                
+                const gatewayStatus = gatewayTransaction?.status || 
+                                     gatewayTransaction?.transactionStatus ||
+                                     gatewayData?.status;
+
+                console.log('📊 Status do gateway:', {
+                  transactionId: transactionId.substring(0, 8) + '...',
+                  gatewayStatus,
+                  dbStatus,
+                  paidAt: gatewayTransaction?.paidAt || gatewayTransaction?.paid_at,
+                  endToEndId: gatewayTransaction?.endToEndId || gatewayTransaction?.end_to_end_id,
+                  transactionData: {
+                    id: gatewayTransaction?.id || gatewayTransaction?.transactionId,
+                    amount: gatewayTransaction?.amount,
+                    paymentMethod: gatewayTransaction?.paymentMethod
+                  }
+                });
+
+                // ⚠️ CRÍTICO: Se gateway mostra PAID mas banco não, atualizar banco automaticamente
+                // Verificar diferentes variações de status PAID
+                const isGatewayPaid = gatewayStatus === 'PAID' || 
+                                     gatewayStatus === 'paid' || 
+                                     gatewayStatus === 'PAGO' ||
+                                     gatewayStatus === 'pago' ||
+                                     gatewayStatus === 'CONFIRMED' ||
+                                     gatewayStatus === 'confirmed';
+                
+                const isDbPaid = dbStatus === 'PAID' || 
+                                dbStatus === 'paid' || 
+                                dbStatus === 'pago' ||
+                                dbStatus === 'PAGO';
+
+                if (isGatewayPaid && !isDbPaid) {
+                  console.log('🔄 ⚠️⚠️⚠️ GATEWAY MOSTRA PAID MAS BANCO NÃO - ATUALIZANDO BANCO ⚠️⚠️⚠️');
+                  console.log('📝 Dados do gateway:', {
+                    gatewayStatus,
+                    dbStatus,
+                    paidAt: gatewayTransaction?.paidAt || gatewayTransaction?.paid_at,
+                    endToEndId: gatewayTransaction?.endToEndId || gatewayTransaction?.end_to_end_id,
+                    transactionId: gatewayTransaction?.id || gatewayTransaction?.transactionId
+                  });
                   
                   const { updateOrderByTransactionId } = await import('./lib/supabase.js');
-                  await updateOrderByTransactionId(transactionId, {
+                  const paidAtValue = gatewayTransaction?.paidAt || 
+                                     gatewayTransaction?.paid_at || 
+                                     gatewayTransaction?.paidAtDate ||
+                                     new Date().toISOString();
+                  
+                  const updateResult = await updateOrderByTransactionId(transactionId, {
                     umbrella_status: 'PAID',
                     status: 'pago',
-                    umbrella_paid_at: gatewayTransaction?.paidAt || new Date().toISOString(),
-                    umbrella_end_to_end_id: gatewayTransaction?.endToEndId || null,
+                    umbrella_paid_at: paidAtValue,
+                    umbrella_end_to_end_id: gatewayTransaction?.endToEndId || 
+                                         gatewayTransaction?.end_to_end_id || 
+                                         gatewayTransaction?.endToEnd ||
+                                         null,
                     updated_at: new Date().toISOString()
                   });
 
-                  console.log('✅ Banco atualizado automaticamente pelo polling');
+                  if (updateResult) {
+                    console.log('✅✅✅ BANCO ATUALIZADO COM SUCESSO PELO POLLING ✅✅✅');
+                    console.log('📋 Pedido atualizado:', {
+                      orderNumber: updateResult.order_number,
+                      newStatus: updateResult.umbrella_status,
+                      paidAt: updateResult.umbrella_paid_at,
+                      endToEndId: updateResult.umbrella_end_to_end_id
+                    });
+                  } else {
+                    console.error('❌❌❌ ERRO AO ATUALIZAR BANCO - updateResult é null ❌❌❌');
+                    // Mesmo assim, retornar PAID para o frontend detectar
+                  }
                   
                   // Retornar status atualizado
                   return res.status(200).json({
@@ -101,17 +193,49 @@ export default async function handler(req, res) {
                     orderNumber: order.order_number,
                     status: 'PAID',
                     amount: order.total_price,
-                    paidAt: gatewayTransaction?.paidAt || new Date().toISOString(),
+                    paidAt: paidAtValue,
                     source: 'database_updated_by_polling', // Indica que foi atualizado pelo polling
                     pix: {
                       qrCode: order.umbrella_qr_code || order.pix_code,
                     }
                   });
+                } else if (isGatewayPaid && isDbPaid) {
+                  // Gateway mostra PAID e banco também - retornar PAID
+                  console.log('✅ Gateway e banco ambos mostram PAID');
+                  return res.status(200).json({
+                    success: true,
+                    status: 200,
+                    transactionId: order.umbrella_transaction_id,
+                    externalRef: order.umbrella_external_ref,
+                    orderNumber: order.order_number,
+                    status: 'PAID',
+                    amount: order.total_price,
+                    paidAt: order.umbrella_paid_at || gatewayTransaction?.paidAt || gatewayTransaction?.paid_at || new Date().toISOString(),
+                    source: 'database',
+                    pix: {
+                      qrCode: order.umbrella_qr_code || order.pix_code,
+                    }
+                  });
+                } else {
+                  // Gateway ainda mostra WAITING_PAYMENT
+                  console.log('⏳ Gateway ainda mostra:', gatewayStatus);
                 }
+              } else {
+                // Tentar ler a resposta mesmo em caso de erro
+                const errorText = await gatewayResponse.text().catch(() => 'Não foi possível ler resposta');
+                console.error('❌❌❌ ERRO AO CONSULTAR GATEWAY ❌❌❌');
+                console.error('📋 Detalhes do erro:', {
+                  status: gatewayResponse.status,
+                  statusText: gatewayResponse.statusText,
+                  responseText: errorText.substring(0, 500),
+                  transactionId: transactionId.substring(0, 8) + '...'
+                });
               }
+            } else {
+              console.warn('⚠️ UMBRELLAPAG_API_KEY não configurada, não é possível verificar gateway');
             }
           } catch (error) {
-            console.warn('⚠️ Erro ao verificar gateway durante polling:', error);
+            console.error('❌ Erro ao verificar gateway durante polling:', error);
             // Continuar com status do banco se houver erro
           }
         }
@@ -166,6 +290,12 @@ export default async function handler(req, res) {
       endpoint = `${BASE_URL}/user/transactions?externalRef=${externalRef}`;
     }
 
+    console.log('🔍 Consultando gateway (fallback):', {
+      endpoint,
+      transactionId: transactionId?.substring(0, 8) + '...' || 'não fornecido',
+      externalRef: externalRef || 'não fornecido'
+    });
+
     const response = await fetch(endpoint, {
       method: 'GET',
       headers: {
@@ -175,16 +305,29 @@ export default async function handler(req, res) {
       }
     });
 
+    console.log('📥 Resposta do gateway (fallback):', {
+      status: response.status,
+      statusText: response.statusText,
+      ok: response.ok
+    });
+
     const text = await response.text();
+    console.log('📋 Resposta raw (fallback):', text.substring(0, 500));
     
     let data;
     try {
       data = JSON.parse(text);
-    } catch {
+      console.log('📊 Dados parseados (fallback):', JSON.stringify(data, null, 2));
+    } catch (parseError) {
+      console.error('❌ Erro ao parsear resposta (fallback):', parseError);
       data = { raw: text.substring(0, 500) };
     }
 
     if (!response.ok) {
+      console.error('❌ Gateway retornou erro:', {
+        status: response.status,
+        data
+      });
       return res.status(response.status).json({
         success: false,
         status: response.status,
@@ -193,8 +336,17 @@ export default async function handler(req, res) {
       });
     }
 
-    // Extrair dados da transação
-    const transactionData = data?.data || data;
+    // Extrair dados da transação (pode vir em diferentes formatos)
+    const transactionData = data?.data || 
+                           data?.transaction || 
+                           data;
+    
+    console.log('📊 Dados da transação extraídos:', {
+      id: transactionData?.id || transactionData?.transactionId,
+      status: transactionData?.status,
+      amount: transactionData?.amount,
+      paidAt: transactionData?.paidAt || transactionData?.paid_at
+    });
     
     // Verificar se expirou
     const expirationDate = transactionData?.pix?.expirationDate || transactionData?.pix?.expiresAt;

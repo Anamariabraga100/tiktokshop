@@ -268,28 +268,46 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
       }
 
       try {
+        console.log('🔄 Verificando status do pagamento...', {
+          transactionId: transactionId?.substring(0, 8) + '...',
+          timestamp: new Date().toISOString()
+        });
+
         const response = await fetch(`/api/order-status?transactionId=${transactionId}`);
         const data = await response.json();
 
         // Verificar novamente se componente ainda está montado após fetch
         if (!isMounted) {
+          console.log('🛑 Componente desmontado após fetch, parando');
           return;
         }
 
         if (!response.ok || !data.success) {
-          console.warn('⚠️ Erro ao verificar status:', data.error || 'Erro desconhecido');
+          console.warn('⚠️ Erro ao verificar status:', {
+            status: response.status,
+            error: data.error || 'Erro desconhecido',
+            data: data
+          });
           return; // Continuar tentando
         }
 
         console.log('📊 Status verificado:', {
           transactionId,
           status: data.status,
-          timestamp: new Date().toISOString()
+          source: data.source, // 'database', 'gateway', 'database_updated_by_polling'
+          timestamp: new Date().toISOString(),
+          paidAt: data.paidAt
         });
 
         // ⚠️ IMPORTANTE: Status vem do backend (fonte da verdade)
-        // Se pagamento foi confirmado, redirecionar
-        if (data.status === 'PAID') {
+        // Verificar se pagamento foi confirmado (pode vir como 'PAID', 'paid', 'pago')
+        const isPaid = data.status === 'PAID' || 
+                      data.status === 'paid' || 
+                      data.status === 'pago' ||
+                      (data.source === 'database_updated_by_polling' && data.status === 'PAID');
+
+        if (isPaid) {
+          console.log('✅✅✅ PAGAMENTO CONFIRMADO - Status:', data.status, 'Source:', data.source);
           console.log('✅✅✅ PAGAMENTO CONFIRMADO - INICIANDO REDIRECIONAMENTO ✅✅✅');
           
           // Parar polling imediatamente

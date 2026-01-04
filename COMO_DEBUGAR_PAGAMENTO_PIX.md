@@ -260,3 +260,4 @@ Se após seguir todos os passos ainda não funcionar:
    - Vercel (se problema no deploy)
    - Supabase (se problema no banco)
 
+

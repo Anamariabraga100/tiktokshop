@@ -52,9 +52,25 @@ export const getOrderByTransactionId = async (transactionId) => {
  */
 export const updateOrderByTransactionId = async (transactionId, updates) => {
   try {
-    if (!supabase || !transactionId) {
+    if (!supabase) {
+      console.error('❌ Supabase não configurado');
       return null;
     }
+    
+    if (!transactionId) {
+      console.error('❌ transactionId não fornecido');
+      return null;
+    }
+
+    console.log('🔄 Atualizando pedido no banco:', {
+      transactionId: transactionId.substring(0, 8) + '...',
+      updates: {
+        ...updates,
+        // Não logar dados sensíveis
+        umbrella_paid_at: updates.umbrella_paid_at ? 'definido' : 'não definido',
+        umbrella_end_to_end_id: updates.umbrella_end_to_end_id ? 'definido' : 'não definido'
+      }
+    });
 
     const { data, error } = await supabase
       .from('orders')
@@ -67,15 +83,40 @@ export const updateOrderByTransactionId = async (transactionId, updates) => {
       .single();
 
     if (error) {
-      console.error('❌ Erro ao atualizar pedido por transactionId:', error);
+      console.error('❌❌❌ ERRO AO ATUALIZAR PEDIDO NO BANCO ❌❌❌');
+      console.error('📋 Detalhes do erro:', {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        transactionId: transactionId.substring(0, 8) + '...'
+      });
       return null;
     }
 
+    if (!data) {
+      console.warn('⚠️ Atualização retornou null - pedido pode não existir');
+      return null;
+    }
+
+    console.log('✅ Pedido atualizado com sucesso:', {
+      orderNumber: data.order_number,
+      umbrellaStatus: data.umbrella_status,
+      status: data.status,
+      paidAt: data.umbrella_paid_at
+    });
+
     return data;
   } catch (error) {
-    console.error('❌ Erro ao atualizar pedido por transactionId:', error);
+    console.error('❌❌❌ EXCEÇÃO AO ATUALIZAR PEDIDO ❌❌❌');
+    console.error('📋 Detalhes da exceção:', {
+      message: error.message,
+      stack: error.stack,
+      transactionId: transactionId?.substring(0, 8) + '...'
+    });
     return null;
   }
 };
+
 
 

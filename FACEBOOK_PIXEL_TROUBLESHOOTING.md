@@ -144,3 +144,4 @@ O Facebook Pixel cria cookies. Verifique se existem:
    - Se nada funcionar, pode haver um problema específico do ambiente
    - Compartilhe os logs do console e da Vercel
 
+

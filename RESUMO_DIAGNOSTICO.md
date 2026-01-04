@@ -72,3 +72,4 @@ Os logs mostrarão:
 **Próximo passo:** Verificar configurações na Vercel e compartilhar os logs.
 
 
+

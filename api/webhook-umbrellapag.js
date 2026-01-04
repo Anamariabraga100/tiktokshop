@@ -28,11 +28,15 @@ export default async function handler(req, res) {
 
     const webhookData = req.body;
 
+    console.log('📥📥📥 WEBHOOK RECEBIDO 📥📥📥');
+    console.log('📋 Dados completos do webhook:', JSON.stringify(webhookData, null, 2));
     console.log('📥 Webhook recebido:', {
       transactionId: webhookData?.transactionId || webhookData?.id,
       externalRef: webhookData?.externalRef,
       status: webhookData?.status,
-      event: webhookData?.event
+      event: webhookData?.event,
+      paidAt: webhookData?.paidAt,
+      endToEndId: webhookData?.endToEndId || webhookData?.end_to_end_id
     });
 
     // Validação mínima do webhook
@@ -123,22 +127,38 @@ export default async function handler(req, res) {
               order.status, // Manter status atual se não for um dos conhecidos
     };
 
-    // Se foi pago, atualizar data de pagamento
+    // Se foi pago, atualizar data de pagamento e end-to-end ID
     if (status === 'PAID') {
-      updateData.umbrella_paid_at = new Date().toISOString();
+      updateData.umbrella_paid_at = webhookData?.paidAt || webhookData?.paid_at || new Date().toISOString();
       updateData.status = 'pago'; // Status interno também
+      updateData.umbrella_end_to_end_id = webhookData?.endToEndId || webhookData?.end_to_end_id || null;
+      console.log('💰💰💰 PAGAMENTO CONFIRMADO NO WEBHOOK 💰💰💰');
+      console.log('📋 Dados do pagamento:', {
+        paidAt: updateData.umbrella_paid_at,
+        endToEndId: updateData.umbrella_end_to_end_id
+      });
     }
+
+    console.log('🔄 Atualizando banco de dados:', {
+      transactionId: transactionId.substring(0, 8) + '...',
+      oldStatus: currentStatus,
+      newStatus: status,
+      updateData
+    });
 
     const updatedOrder = await updateOrderByTransactionId(transactionId, updateData);
 
     if (updatedOrder) {
-      console.log('✅ Pedido atualizado no banco:', {
+      console.log('✅✅✅ PEDIDO ATUALIZADO NO BANCO COM SUCESSO ✅✅✅');
+      console.log('📋 Detalhes da atualização:', {
         orderNumber: updatedOrder.order_number,
         oldStatus: currentStatus,
-        newStatus: status
+        newStatus: updatedOrder.umbrella_status,
+        paidAt: updatedOrder.umbrella_paid_at,
+        endToEndId: updatedOrder.umbrella_end_to_end_id
       });
     } else {
-      console.error('❌ Erro ao atualizar pedido no banco');
+      console.error('❌❌❌ ERRO AO ATUALIZAR PEDIDO NO BANCO - updatedOrder é null ❌❌❌');
     }
 
     // Log estratégico (sem dados sensíveis)

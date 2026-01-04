@@ -66,7 +66,10 @@ export default async function handler(req, res) {
     try {
       const API_KEY = process.env.UMBRELLAPAG_API_KEY;
       if (API_KEY) {
-        const response = await fetch(`${BASE_URL}/user/transactions/${transactionId}`, {
+        const gatewayUrl = `${BASE_URL}/user/transactions/${transactionId}`;
+        console.log('🔍 Consultando gateway:', gatewayUrl);
+        
+        const response = await fetch(gatewayUrl, {
           method: 'GET',
           headers: {
             'x-api-key': API_KEY,
@@ -75,20 +78,50 @@ export default async function handler(req, res) {
           }
         });
 
-        const data = await response.json();
-        const transactionData = data?.data || data;
+        console.log('📥 Resposta do gateway:', {
+          status: response.status,
+          statusText: response.statusText,
+          ok: response.ok
+        });
+
+        const responseText = await response.text();
+        console.log('📋 Resposta raw:', responseText.substring(0, 1000));
+
+        let data;
+        try {
+          data = JSON.parse(responseText);
+        } catch (parseError) {
+          debugInfo.checks.gateway = {
+            found: false,
+            error: 'Resposta não é JSON válido',
+            rawResponse: responseText.substring(0, 500),
+            httpStatus: response.status
+          };
+          throw parseError;
+        }
+
+        const transactionData = data?.data || 
+                               data?.transaction || 
+                               data;
+
+        console.log('📊 Dados da transação:', JSON.stringify(transactionData, null, 2));
 
         debugInfo.checks.gateway = {
           found: response.ok,
-          status: transactionData?.status,
-          amount: transactionData?.amount,
-          paidAt: transactionData?.paidAt,
-          endToEndId: transactionData?.endToEndId,
+          httpStatus: response.status,
+          httpStatusText: response.statusText,
+          status: transactionData?.status || data?.status,
+          amount: transactionData?.amount || data?.amount,
+          paidAt: transactionData?.paidAt || transactionData?.paid_at || data?.paidAt,
+          endToEndId: transactionData?.endToEndId || transactionData?.end_to_end_id || data?.endToEndId,
+          transactionId: transactionData?.id || transactionData?.transactionId || data?.id,
+          paymentMethod: transactionData?.paymentMethod || data?.paymentMethod,
           pix: {
-            qrCode: !!transactionData?.pix?.qrCode,
-            expirationDate: transactionData?.pix?.expirationDate
+            hasQrCode: !!(transactionData?.pix?.qrCode || transactionData?.pix?.qrcode || data?.pix?.qrCode),
+            expirationDate: transactionData?.pix?.expirationDate || transactionData?.pix?.expiresAt || data?.pix?.expirationDate
           },
-          raw: transactionData
+          raw: transactionData,
+          fullResponse: data
         };
       } else {
         debugInfo.checks.gateway = {
@@ -97,9 +130,11 @@ export default async function handler(req, res) {
         };
       }
     } catch (error) {
+      console.error('❌ Erro ao consultar gateway:', error);
       debugInfo.checks.gateway = {
         found: false,
-        error: error.message
+        error: error.message,
+        stack: error.stack
       };
     }
 
@@ -154,4 +189,5 @@ export default async function handler(req, res) {
     });
   }
 }
+
 

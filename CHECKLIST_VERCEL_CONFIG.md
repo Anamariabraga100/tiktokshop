@@ -194,3 +194,4 @@ Se após todas essas verificações o problema persistir, pode ser necessário:
 3. **Considerar usar Vercel CLI localmente** para testar as funções
 
 
+

@@ -195,3 +195,4 @@ Após seguir esses passos, seu Facebook Pixel estará configurado e rastreando t
 - [Facebook Pixel Documentation](https://developers.facebook.com/docs/facebook-pixel)
 - [Events Manager](https://business.facebook.com/events_manager2)
 
+

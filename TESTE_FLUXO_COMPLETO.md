@@ -221,3 +221,4 @@ O fluxo é idêntico:
 - ⚠️ **Idempotência garantida**: Webhook não processa duas vezes o mesmo status
 
 
+
