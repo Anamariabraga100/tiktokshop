@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Copy, Check, QrCode, Clock } from 'lucide-react';
+import { X, Copy, Check, QrCode } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -722,8 +722,12 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
                     </>
                   ) : pixCode ? (
                     <>
-                      <Clock className="w-4 h-4" />
-                      <span>Aguardando pagamento PIX</span>
+                      <motion.div
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                        className="w-4 h-4 border-2 border-white border-t-transparent rounded-full"
+                      />
+                      <span>Aguardando pagamento</span>
                     </>
                   ) : (
                     <span>Confirmar pedido</span>
