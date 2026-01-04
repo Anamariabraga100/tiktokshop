@@ -78,33 +78,51 @@ export async function trackFacebookEvent(
       }
     }
     
-    // Tentar obter fbp (Facebook Browser ID) do cookie
-    // Formato: fb.1.1234567890.1234567890
+    // ⚠️ CRÍTICO: Capturar fbp e fbc do Facebook Pixel
+    // O Facebook Pixel cria esses cookies automaticamente quando inicializado
+    // Precisamos obter diretamente do Pixel ou dos cookies que ele cria
+    
+    // 1. Tentar obter fbp (Facebook Browser ID) do cookie _fbp
+    // O Facebook Pixel cria este cookie automaticamente no formato: fb.1.timestamp.random
     let fbp = getCookie('_fbp') || '';
     
-    // Se não tiver _fbp, tentar criar um (para melhor atribuição)
-    if (!fbp) {
-      // Gerar fbp se não existir (formato: fb.1.timestamp.random)
-      const timestamp = Date.now();
-      const random = Math.floor(Math.random() * 1000000000);
-      fbp = `fb.1.${timestamp}.${random}`;
-      // Salvar no cookie para reutilizar
-      document.cookie = `_fbp=${fbp}; expires=${new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toUTCString()}; path=/`;
-    }
+    // 2. Tentar obter fbc (Facebook Click ID) do cookie _fbc
+    // O Facebook Pixel cria este cookie quando há fbclid na URL
+    let fbc = getCookie('_fbc') || '';
     
-    // Tentar obter fbc (Facebook Click ID) do cookie ou URL
-    // Formato: fb.1.timestamp.fbclid
-    let fbc = getCookie('_fbc') || getFbcFromUrl() || '';
-    
-    // Se não tiver _fbc mas tiver fbclid na URL, criar
+    // 3. Se não tiver fbc no cookie, tentar criar a partir de fbclid na URL
+    // Isso é importante para capturar cliques do Facebook
     if (!fbc) {
       const urlParams = new URLSearchParams(window.location.search);
       const fbclid = urlParams.get('fbclid');
       if (fbclid) {
-        fbc = `fb.1.${Date.now()}.${fbclid}`;
-        // Salvar no cookie para reutilizar
-        document.cookie = `_fbc=${fbc}; expires=${new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toUTCString()}; path=/`;
+        // Formato correto do fbc: fb.1.timestamp.fbclid
+        const timestamp = Date.now();
+        fbc = `fb.1.${timestamp}.${fbclid}`;
+        // Salvar no cookie para reutilizar (90 dias)
+        const expiresDate = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+        document.cookie = `_fbc=${fbc}; expires=${expiresDate.toUTCString()}; path=/; SameSite=None; Secure`;
+        console.log('✅ fbc criado a partir de fbclid:', fbc.substring(0, 20) + '...');
       }
+    }
+    
+    // 4. Se não tiver fbp, o Facebook Pixel deveria criar, mas vamos garantir
+    // Nota: Não devemos criar fbp manualmente se o Pixel não criou, pois pode causar problemas
+    // O fbp só deve ser criado pelo próprio Facebook Pixel
+    if (!fbp) {
+      console.warn('⚠️ _fbp não encontrado. O Facebook Pixel deve criar este cookie automaticamente.');
+    }
+    
+    // 5. Log para debug
+    if (fbc || fbp) {
+      console.log('📊 Facebook IDs capturados:', {
+        hasFbc: !!fbc,
+        hasFbp: !!fbp,
+        fbcPreview: fbc ? fbc.substring(0, 30) + '...' : 'não disponível',
+        fbpPreview: fbp ? fbp.substring(0, 30) + '...' : 'não disponível'
+      });
+    } else {
+      console.warn('⚠️ Nenhum Facebook ID (fbc/fbp) encontrado. Isso pode afetar a atribuição de campanha.');
     }
 
     // Preparar dados do usuário
@@ -119,12 +137,21 @@ export async function trackFacebookEvent(
       userDataWithDefaults.clientIpAddress = clientIpAddress;
     }
     
+    // ⚠️ CRÍTICO: Sempre enviar fbp e fbc se disponíveis
+    // Esses são os parâmetros mais importantes para atribuição de campanha
     if (fbp && fbp.trim()) {
       userDataWithDefaults.fbp = fbp.trim();
+      console.log('✅ fbp será enviado:', fbp.substring(0, 20) + '...');
+    } else {
+      console.warn('⚠️ fbp não disponível - pode afetar atribuição de campanha');
     }
     
     if (fbc && fbc.trim()) {
       userDataWithDefaults.fbc = fbc.trim();
+      console.log('✅ fbc será enviado:', fbc.substring(0, 20) + '...');
+    } else {
+      console.warn('⚠️ fbc não disponível - CRÍTICO para atribuição de campanha!');
+      console.warn('💡 Dica: Certifique-se de que o usuário clicou em um anúncio do Facebook (fbclid na URL)');
     }
 
     // Enviar para o servidor
@@ -327,6 +354,8 @@ export function initFacebookPixel(pixelId: string): void {
   console.log('🚀 Inicializando Facebook Pixel com ID:', pixelId);
 
   // Criar script do Facebook Pixel
+  // ⚠️ IMPORTANTE: O Pixel precisa ser inicializado ANTES de qualquer evento
+  // para que ele crie os cookies _fbp e _fbc automaticamente
   const script = document.createElement('script');
   script.id = 'facebook-pixel-script';
   script.innerHTML = `
@@ -338,7 +367,22 @@ export function initFacebookPixel(pixelId: string): void {
     t.src=v;s=b.getElementsByTagName(e)[0];
     s.parentNode.insertBefore(t,s)}(window, document,'script',
     'https://connect.facebook.net/en_US/fbevents.js');
-    fbq('init', '${pixelId}');
+    fbq('init', '${pixelId}', {
+      // Configurações para melhor captura de dados
+      autoConfig: true,
+      debug: false
+    });
+    
+    // Verificar se cookies foram criados
+    setTimeout(function() {
+      var fbp = document.cookie.match(/_fbp=([^;]+)/);
+      var fbc = document.cookie.match(/_fbc=([^;]+)/);
+      console.log('📊 Facebook Pixel - Cookies criados:', {
+        hasFbp: !!fbp,
+        hasFbc: !!fbc
+      });
+    }, 1000);
+    
     console.log('✅ Facebook Pixel inicializado com sucesso');
   `;
   

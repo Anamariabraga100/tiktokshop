@@ -74,6 +74,7 @@ export default async function handler(req, res) {
     }
     
     // Telefone (ph) - hash SHA256 obrigatório, apenas números com código do país
+    // ⚠️ IMPORTANTE: Telefone pode aumentar conversões em 14.78% segundo Facebook
     if (userData?.phone) {
       let phone = userData.phone.replace(/\D/g, ''); // Remove tudo que não é número
       // Adicionar código do país (55 para Brasil) se não tiver
@@ -82,7 +83,12 @@ export default async function handler(req, res) {
       }
       if (phone && phone.length >= 12) { // Mínimo: código país (2) + DDD (2) + número (8+)
         userDataForFacebook.ph = sha256Hash(phone);
+        console.log('✅ Telefone será enviado (hash):', phone.substring(0, 4) + '***');
+      } else {
+        console.warn('⚠️ Telefone inválido ou muito curto:', phone);
       }
+    } else {
+      console.warn('⚠️ Telefone não fornecido - pode perder 14.78% de conversões adicionais');
     }
     
     // Nome (fn) - hash SHA256 obrigatório
@@ -193,13 +199,23 @@ export default async function handler(req, res) {
       userDataForFacebook.client_user_agent = clientUserAgent;
     }
     
-    // FBC e FBP apenas se não estiverem vazios
+    // ⚠️ CRÍTICO: FBC e FBP são ESSENCIAIS para atribuição de campanha
+    // Sem fbc, o Facebook não consegue atribuir conversões às campanhas
+    // Sem fbp, a qualidade da correspondência diminui significativamente
+    
     if (userData?.fbc && userData.fbc.trim()) {
       userDataForFacebook.fbc = userData.fbc.trim();
+      console.log('✅ fbc recebido e será enviado:', userData.fbc.substring(0, 30) + '...');
+    } else {
+      console.warn('⚠️⚠️⚠️ fbc NÃO recebido - CRÍTICO para atribuição de campanha!');
+      console.warn('💡 Isso significa que o usuário pode não ter clicado em um anúncio do Facebook');
     }
     
     if (userData?.fbp && userData.fbp.trim()) {
       userDataForFacebook.fbp = userData.fbp.trim();
+      console.log('✅ fbp recebido e será enviado:', userData.fbp.substring(0, 30) + '...');
+    } else {
+      console.warn('⚠️ fbp não recebido - pode afetar qualidade da correspondência');
     }
     
     // Construir custom_data apenas com campos válidos
