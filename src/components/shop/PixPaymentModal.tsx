@@ -251,19 +251,16 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
             });
             
             // Redirecionar para página de agradecimento após 2 segundos
+            // ✅ Usar query string em vez de state (não quebra em refresh)
             setTimeout(() => {
               try {
-                navigate('/thank-you', { 
-                  state: { 
-                    items: items,
-                    transaction: umbrellaTransaction,
-                    paymentPending: false,
-                  } 
-                });
+                const orderIdParam = orderId ? `?orderId=${encodeURIComponent(orderId)}` : '';
+                navigate(`/thank-you${orderIdParam}`);
                 onPaymentComplete();
               } catch (error) {
                 console.error('Erro ao navegar:', error);
-                window.location.href = '/thank-you';
+                const orderIdParam = orderId ? `?orderId=${encodeURIComponent(orderId)}` : '';
+                window.location.href = `/thank-you${orderIdParam}`;
               }
             }, 2000);
           }
@@ -645,19 +642,16 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
       // O usuário precisa pagar o PIX primeiro
       
       // Redirecionar para tela de agradecimento com informações do pagamento
+      // ✅ Usar query string em vez de state (não quebra em refresh)
       setTimeout(() => {
         try {
-          navigate('/thank-you', { 
-            state: { 
-              items: items,
-              transaction: umbrellaTransaction,
-              paymentPending: true,
-            } 
-          });
+          const orderIdParam = orderId ? `?orderId=${encodeURIComponent(orderId)}` : '';
+          navigate(`/thank-you${orderIdParam}`);
         } catch (error) {
           console.error('Erro ao navegar:', error);
           // Fallback: usar window.location se navigate falhar
-          window.location.href = '/thank-you';
+          const orderIdParam = orderId ? `?orderId=${encodeURIComponent(orderId)}` : '';
+          window.location.href = `/thank-you${orderIdParam}`;
         }
       }, 500);
     } catch (error: any) {

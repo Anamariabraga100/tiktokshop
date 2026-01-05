@@ -29,36 +29,65 @@ const ThankYou = () => {
 
   useEffect(() => {
     try {
-      // Gerar número do pedido
-      const orderNum = Math.random().toString(36).substring(2, 10).toUpperCase();
-      setOrderNumber(orderNum);
+      // ✅ Usar query string em vez de state (não quebra em refresh)
+      const params = new URLSearchParams(location.search);
+      const orderIdFromQuery = params.get('orderId');
 
       // Recuperar itens comprados do localStorage ou state
       const savedOrder = localStorage.getItem('lastOrder');
       if (savedOrder) {
         try {
           const order = JSON.parse(savedOrder);
-          setPurchasedItems(order.items || []);
+          // ✅ Validar antes de acessar propriedades
+          if (order && Array.isArray(order.items)) {
+            setPurchasedItems(order.items.filter(item => item && item.id)); // Filtrar itens válidos
+          } else {
+            setPurchasedItems([]);
+          }
+          // ✅ Usar orderId do query ou do localStorage
+          if (order?.orderNumber) {
+            setOrderNumber(order.orderNumber);
+          } else if (orderIdFromQuery) {
+            setOrderNumber(orderIdFromQuery);
+          } else {
+            // Gerar número do pedido como fallback
+            const orderNum = Math.random().toString(36).substring(2, 10).toUpperCase();
+            setOrderNumber(orderNum);
+          }
         } catch (e) {
           console.error('Erro ao recuperar pedido:', e);
           setPurchasedItems([]);
+          // Gerar número do pedido como fallback
+          const orderNum = Math.random().toString(36).substring(2, 10).toUpperCase();
+          setOrderNumber(orderNum);
         }
-      } else if (location.state?.items) {
-        setPurchasedItems(location.state.items || []);
+      } else if (location.state?.items && Array.isArray(location.state.items)) {
+        // ✅ Validar que items é array antes de usar
+        setPurchasedItems(location.state.items.filter(item => item && item.id)); // Filtrar itens válidos
+        if (orderIdFromQuery) {
+          setOrderNumber(orderIdFromQuery);
+        } else {
+          const orderNum = Math.random().toString(36).substring(2, 10).toUpperCase();
+          setOrderNumber(orderNum);
+        }
+      } else if (orderIdFromQuery) {
+        // Se tiver orderId na query, tentar buscar do banco ou mostrar página mesmo sem items
+        setOrderNumber(orderIdFromQuery);
+        setPurchasedItems([]); // Vai mostrar página mesmo sem items
       } else {
-        // Se não houver dados, redirecionar para home após um delay
-        setTimeout(() => {
-          navigate('/');
-        }, 2000);
+        // Se não houver dados, gerar número e mostrar página (não redirecionar)
+        const orderNum = Math.random().toString(36).substring(2, 10).toUpperCase();
+        setOrderNumber(orderNum);
+        setPurchasedItems([]);
       }
     } catch (error) {
       console.error('Erro ao inicializar ThankYou:', error);
-      // Em caso de erro, redirecionar para home
-      setTimeout(() => {
-        navigate('/');
-      }, 1000);
+      // Em caso de erro, gerar número e mostrar página (não quebrar)
+      const orderNum = Math.random().toString(36).substring(2, 10).toUpperCase();
+      setOrderNumber(orderNum);
+      setPurchasedItems([]);
     }
-  }, [location.state, navigate]);
+  }, [location.state, location.search, navigate]);
 
   // Disparar evento Purchase quando pedido estiver completo
   useEffect(() => {
@@ -84,11 +113,14 @@ const ThankYou = () => {
         }, 0);
 
         // Preparar contents para Facebook Pixel
-        const contents = regularItems.map(item => ({
-          id: item.id,
-          quantity: item.quantity,
-          item_price: item.price,
-        }));
+        // ✅ Validar item antes de acessar propriedades
+        const contents = regularItems
+          .filter(item => item && item.id && item.price && item.quantity)
+          .map(item => ({
+            id: item.id,
+            quantity: item.quantity || 1,
+            item_price: item.price || 0,
+          }));
 
         // Preparar dados do cliente
         const nameParts = customerData?.name?.trim().split(/\s+/) || [];
@@ -129,10 +161,11 @@ const ThankYou = () => {
   }, [purchasedItems, orderNumber, customerData]);
 
   // Obter categorias dos produtos comprados
+  // ✅ Validar item antes de acessar propriedades
   const purchasedCategories = useMemo(() => {
     const categories = new Set<string>();
     purchasedItems.forEach(item => {
-      if (item.category) {
+      if (item && item.category) {
         categories.add(item.category);
       }
     });
@@ -141,8 +174,13 @@ const ThankYou = () => {
 
   // Produtos relacionados (mesma categoria dos comprados)
   // Sempre mostrar pelo menos 8 produtos
+  // ✅ Validar item antes de acessar propriedades
   const relatedProducts = useMemo(() => {
-    const purchasedIds = new Set(purchasedItems.map(item => item.id));
+    const purchasedIds = new Set(
+      purchasedItems
+        .filter(item => item && item.id)
+        .map(item => item.id)
+    );
     let related: Product[] = [];
     
     // Primeiro, tentar pegar produtos da mesma categoria
@@ -176,9 +214,14 @@ const ThankYou = () => {
   }, [purchasedCategories, purchasedItems]);
 
   // Vídeos do criador (pegar vídeos de produtos relacionados)
+  // ✅ Validar item antes de acessar propriedades
   const creatorVideos = useMemo(() => {
     const videos: Array<{ product: Product; video: CreatorVideo }> = [];
-    const purchasedIds = new Set(purchasedItems.map(item => item.id));
+    const purchasedIds = new Set(
+      purchasedItems
+        .filter(item => item && item.id)
+        .map(item => item.id)
+    );
     
     // Primeiro, pegar produtos com mais vídeos (priorizar Kit Barbeador que tem 6 vídeos)
     // Ordenar por: quantidade de vídeos (desc), depois por soldCount (desc)
@@ -290,9 +333,10 @@ const ThankYou = () => {
   const handleVideoClick = (index: number) => {
     setFullscreenVideoIndex(index);
     // Inicializar estado do vídeo se não existir
+    // ✅ Validar video e video.video antes de acessar propriedades
     const video = creatorVideos[index];
-    if (video && !videoStates[video.video.id]) {
-      const initialLikes = getLikesCount(video.video.id, video.product.likesCount);
+    if (video && video.video && video.video.id && !videoStates[video.video.id]) {
+      const initialLikes = getLikesCount(video.video.id, video.product?.likesCount);
       setVideoStates(prev => ({
         ...prev,
         [video.video.id]: {
@@ -314,37 +358,41 @@ const ThankYou = () => {
 
   const handleLike = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!fullscreenVideo) return;
+    // ✅ Validar fullscreenVideo e video antes de acessar propriedades
+    if (!fullscreenVideo || !fullscreenVideo.video || !fullscreenVideo.video.id) return;
     
-    const currentState = videoStates[fullscreenVideo.video.id] || {
+    const videoId = fullscreenVideo.video.id;
+    const currentState = videoStates[videoId] || {
       isLiked: false,
-      likesCount: fullscreenVideo.product.likesCount || Math.floor(Math.random() * 50000) + 10000,
+      likesCount: fullscreenVideo.product?.likesCount || Math.floor(Math.random() * 50000) + 10000,
       sharesCount: Math.floor(Math.random() * 1000) + 200,
     };
     
     const newIsLiked = !currentState.isLiked;
     setVideoStates(prev => ({
       ...prev,
-      [fullscreenVideo.video.id]: {
-        ...prev[fullscreenVideo.video.id],
+      [videoId]: {
+        ...prev[videoId],
         isLiked: newIsLiked,
         likesCount: newIsLiked 
-          ? (prev[fullscreenVideo.video.id]?.likesCount || currentState.likesCount) + 1 
-          : Math.max(0, (prev[fullscreenVideo.video.id]?.likesCount || currentState.likesCount) - 1),
-        sharesCount: prev[fullscreenVideo.video.id]?.sharesCount || currentState.sharesCount,
+          ? (prev[videoId]?.likesCount || currentState.likesCount) + 1 
+          : Math.max(0, (prev[videoId]?.likesCount || currentState.likesCount) - 1),
+        sharesCount: prev[videoId]?.sharesCount || currentState.sharesCount,
       }
     }));
   };
 
   const handleShare = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!fullscreenVideo) return;
+    // ✅ Validar fullscreenVideo e video antes de acessar propriedades
+    if (!fullscreenVideo || !fullscreenVideo.video || !fullscreenVideo.video.id || !fullscreenVideo.product) return;
     
+    const videoId = fullscreenVideo.video.id;
     const shareText = fullscreenVideo.video.title 
       ? `Confira este vídeo: ${fullscreenVideo.video.title}`
-      : `Confira este vídeo de ${fullscreenVideo.video.creatorName}`;
+      : `Confira este vídeo de ${fullscreenVideo.video.creatorName || 'criador'}`;
     
-    const shareUrl = fullscreenVideo.product.url || `${window.location.origin}/produto/${fullscreenVideo.product.id}`;
+    const shareUrl = fullscreenVideo.product.url || `${window.location.origin}/produto/${fullscreenVideo.product.id || ''}`;
     
     const success = await shareContent(
       fullscreenVideo.video.title || 'Vídeo de criador',
@@ -353,19 +401,19 @@ const ThankYou = () => {
     );
     
     if (success) {
-      const currentState = videoStates[fullscreenVideo.video.id] || {
+      const currentState = videoStates[videoId] || {
         isLiked: false,
-        likesCount: fullscreenVideo.product.likesCount || Math.floor(Math.random() * 50000) + 10000,
+        likesCount: fullscreenVideo.product?.likesCount || Math.floor(Math.random() * 50000) + 10000,
         sharesCount: Math.floor(Math.random() * 1000) + 200,
       };
       
       setVideoStates(prev => ({
         ...prev,
-        [fullscreenVideo.video.id]: {
-          ...prev[fullscreenVideo.video.id],
-          sharesCount: (prev[fullscreenVideo.video.id]?.sharesCount || currentState.sharesCount) + 1,
-          likesCount: prev[fullscreenVideo.video.id]?.likesCount || currentState.likesCount,
-          isLiked: prev[fullscreenVideo.video.id]?.isLiked || false,
+        [videoId]: {
+          ...prev[videoId],
+          sharesCount: (prev[videoId]?.sharesCount || currentState.sharesCount) + 1,
+          likesCount: prev[videoId]?.likesCount || currentState.likesCount,
+          isLiked: prev[videoId]?.isLiked || false,
         }
       }));
       
@@ -393,16 +441,8 @@ const ThankYou = () => {
     ? creatorVideos[fullscreenVideoIndex] 
     : null;
 
-  // Se não houver itens comprados, mostrar loading ou redirecionar
-  if (purchasedItems.length === 0 && !orderNumber) {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-background to-muted/30 flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-muted-foreground">Carregando...</p>
-        </div>
-      </div>
-    );
-  }
+  // ✅ Não redirecionar - sempre mostrar página mesmo sem items
+  // A página funciona mesmo sem itens comprados
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/30">
@@ -426,9 +466,16 @@ const ThankYou = () => {
             Pagamento Confirmado!
           </h1>
           
-          <p className="text-lg text-muted-foreground mb-2">
-            Pedido #{orderNumber} está sendo preparado
-          </p>
+          {orderNumber && (
+            <p className="text-lg text-muted-foreground mb-2">
+              Pedido #{orderNumber} está sendo preparado
+            </p>
+          )}
+          {!orderNumber && (
+            <p className="text-lg text-muted-foreground mb-2">
+              Seu pedido está sendo preparado
+            </p>
+          )}
           <p className="text-sm text-muted-foreground">
             Você receberá atualizações por email
           </p>
@@ -466,9 +513,9 @@ const ThankYou = () => {
             
             <div className="overflow-x-auto scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0 md:overflow-visible">
               <div className="flex gap-3 md:grid md:grid-cols-2 lg:grid-cols-4 md:gap-4">
-                {relatedProducts.map((product, index) => (
+                {relatedProducts.filter(p => p && p.id).map((product, index) => (
                   <motion.div
-                    key={product.id}
+                    key={product?.id || `product-${index}`}
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ delay: 0.8 + index * 0.05 }}
@@ -549,9 +596,11 @@ const ThankYou = () => {
             </p>
             
             <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
-              {creatorVideos.map(({ product, video }, index) => (
+              {creatorVideos
+                .filter(({ product, video }) => product && video && video.id && product.id)
+                .map(({ product, video }, index) => (
                 <motion.div
-                  key={video.id}
+                  key={video?.id || `video-${index}`}
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 1.2 + index * 0.1 }}
@@ -606,9 +655,11 @@ const ThankYou = () => {
 
                     {/* Likes no lado direito - Estilo TikTok */}
                     {(() => {
+                      // ✅ Validar video e video.video antes de acessar propriedades
+                      if (!video || !video.video || !video.video.id) return null;
                       // Usar o mesmo número de likes que será usado no fullscreen
                       const videoState = videoStates[video.video.id];
-                      const initialLikes = videoState?.likesCount || getLikesCount(video.video.id, product.likesCount);
+                      const initialLikes = videoState?.likesCount || getLikesCount(video.video.id, product?.likesCount);
                       const formattedLikes = initialLikes > 1000 
                         ? (initialLikes / 1000).toFixed(1).replace('.', ',') + 'mil' 
                         : initialLikes.toString();
@@ -682,33 +733,39 @@ const ThankYou = () => {
                 </button>
 
                 <div className="relative flex-1 overflow-hidden">
-                  <video
-                    key={fullscreenVideoIndex}
-                    ref={fullscreenVideoRef}
-                    src={fullscreenVideo.video.videoUrl}
-                    className="w-full h-full object-cover"
-                    loop
-                    playsInline
-                    autoPlay
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (fullscreenVideoRef.current) {
-                        if (fullscreenVideoRef.current.paused) {
-                          fullscreenVideoRef.current.play();
-                        } else {
-                          fullscreenVideoRef.current.pause();
+                  {/* ✅ Validar fullscreenVideo e video antes de renderizar */}
+                  {fullscreenVideo && fullscreenVideo.video && fullscreenVideo.video.videoUrl && (
+                    <video
+                      key={fullscreenVideoIndex}
+                      ref={fullscreenVideoRef}
+                      src={fullscreenVideo.video.videoUrl}
+                      className="w-full h-full object-cover"
+                      loop
+                      playsInline
+                      autoPlay
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (fullscreenVideoRef.current) {
+                          if (fullscreenVideoRef.current.paused) {
+                            fullscreenVideoRef.current.play();
+                          } else {
+                            fullscreenVideoRef.current.pause();
+                          }
                         }
-                      }
-                    }}
-                  />
+                      }}
+                    />
+                  )}
 
                   {/* Right Side Actions - Likes e Share */}
                   {(() => {
-                    const currentState = fullscreenVideo ? (videoStates[fullscreenVideo.video.id] || {
+                    // ✅ Validar fullscreenVideo e video antes de acessar propriedades
+                    if (!fullscreenVideo || !fullscreenVideo.video || !fullscreenVideo.video.id) return null;
+                    const videoId = fullscreenVideo.video.id;
+                    const currentState = videoStates[videoId] || {
                       isLiked: false,
-                      likesCount: getLikesCount(fullscreenVideo.video.id, fullscreenVideo.product.likesCount),
+                      likesCount: getLikesCount(videoId, fullscreenVideo.product?.likesCount),
                       sharesCount: Math.floor(Math.random() * 1000) + 200,
-                    }) : null;
+                    };
                     
                     return currentState ? (
                       <div className="absolute right-4 md:right-8 bottom-20 md:bottom-32 flex flex-col gap-4 md:gap-6 z-10">
@@ -746,51 +803,60 @@ const ThankYou = () => {
                   })()}
 
                   {/* Product Info Bottom */}
-                  <div className="absolute bottom-0 left-0 right-0 p-4 md:p-6 z-10">
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/20 to-tiktok-pink/20 flex items-center justify-center">
-                        <span className="text-sm font-semibold text-foreground">
-                          {fullscreenVideo.video.creatorInitials}
-                        </span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-white font-semibold text-sm">
-                          {fullscreenVideo.video.creatorName}
-                        </p>
-                        {fullscreenVideo.video.title && (
-                          <p className="text-white/90 text-sm line-clamp-2">
-                            {fullscreenVideo.video.title}
+                  {/* ✅ Validar fullscreenVideo, video e product antes de renderizar */}
+                  {fullscreenVideo && fullscreenVideo.video && fullscreenVideo.product && (
+                    <div className="absolute bottom-0 left-0 right-0 p-4 md:p-6 z-10">
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/20 to-tiktok-pink/20 flex items-center justify-center">
+                          <span className="text-sm font-semibold text-foreground">
+                            {fullscreenVideo.video.creatorInitials || 'CR'}
+                          </span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-white font-semibold text-sm">
+                            {fullscreenVideo.video.creatorName || 'Criador'}
                           </p>
-                        )}
+                          {fullscreenVideo.video.title && (
+                            <p className="text-white/90 text-sm line-clamp-2">
+                              {fullscreenVideo.video.title}
+                            </p>
+                          )}
+                        </div>
                       </div>
-                    </div>
 
-                    {/* Product Card */}
-                    <div 
-                      className="bg-black/80 backdrop-blur-sm p-3 md:p-4 rounded-lg flex items-center gap-3 cursor-pointer hover:bg-black/90 transition-colors"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleAddToCart(fullscreenVideo.product, e);
-                      }}
-                    >
-                      <div className="w-12 h-12 md:w-16 md:h-16 rounded-lg overflow-hidden bg-muted flex-shrink-0">
-                        <img
-                          src={fullscreenVideo.product.image}
-                          alt={fullscreenVideo.product.name}
-                          className="w-full h-full object-cover"
-                        />
+                      {/* Product Card */}
+                      <div 
+                        className="bg-black/80 backdrop-blur-sm p-3 md:p-4 rounded-lg flex items-center gap-3 cursor-pointer hover:bg-black/90 transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (fullscreenVideo.product) {
+                            handleAddToCart(fullscreenVideo.product, e);
+                          }
+                        }}
+                      >
+                        {fullscreenVideo.product.image && (
+                          <div className="w-12 h-12 md:w-16 md:h-16 rounded-lg overflow-hidden bg-muted flex-shrink-0">
+                            <img
+                              src={fullscreenVideo.product.image}
+                              alt={fullscreenVideo.product.name || 'Produto'}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-white font-semibold text-sm md:text-base line-clamp-1">
+                            {fullscreenVideo.product.name || 'Produto'}
+                          </p>
+                          {fullscreenVideo.product.price && (
+                            <p className="text-white/80 text-xs md:text-sm">
+                              R$ {fullscreenVideo.product.price.toFixed(2).replace('.', ',')}
+                            </p>
+                          )}
+                        </div>
+                        <ShoppingCart className="w-5 h-5 md:w-6 md:h-6 text-white flex-shrink-0" />
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-white font-semibold text-sm md:text-base line-clamp-1">
-                          {fullscreenVideo.product.name}
-                        </p>
-                        <p className="text-white/80 text-xs md:text-sm">
-                          R$ {fullscreenVideo.product.price.toFixed(2).replace('.', ',')}
-                        </p>
-                      </div>
-                      <ShoppingCart className="w-5 h-5 md:w-6 md:h-6 text-white flex-shrink-0" />
                     </div>
-                  </div>
+                  )}
 
                   {/* Navigation Arrows */}
                   <button
