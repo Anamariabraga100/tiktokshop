@@ -8,7 +8,7 @@ import { useCoupons } from '@/context/CouponContext';
 import { useCustomer } from '@/context/CustomerContext';
 import { saveOrderToSupabase, OrderRow } from '@/lib/supabase';
 import { createPixTransaction } from '@/lib/umbrellapag';
-import { trackPixGerado, trackPixCopiado } from '@/lib/facebookPixel';
+import { trackPixGerado, trackPixCopiado, trackPurchase } from '@/lib/facebookPixel';
 
 interface PixPaymentModalProps {
   isOpen: boolean;
@@ -26,7 +26,11 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
   const [umbrellaTransaction, setUmbrellaTransaction] = useState<any>(null);
   const [timeRemaining, setTimeRemaining] = useState<number>(600); // 10 minutos em segundos
   const [isExpired, setIsExpired] = useState(false);
+  const [isPaid, setIsPaid] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  const pixGeneratedAtRef = useRef<number | null>(null); // Timestamp quando PIX foi gerado
+  const isPaidRef = useRef<boolean>(false); // Ref para rastrear se foi pago (evita problemas de closure)
   const navigate = useNavigate();
 
   // Calcular valor final (sem desconto PIX)
@@ -70,6 +74,7 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
     if (pixCode && !isExpired) {
       setTimeRemaining(600); // Resetar para 10 minutos
       setIsExpired(false);
+      isPaidRef.current = false; // Resetar ref de pagamento
     }
   }, [pixCode, isExpired]);
 
@@ -86,6 +91,11 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
         setTimeRemaining((prev) => {
           if (prev <= 1) {
             setIsExpired(true);
+            // Limpar polling quando expirar
+            if (pollingRef.current) {
+              clearInterval(pollingRef.current);
+              pollingRef.current = null;
+            }
             return 0;
           }
           return prev - 1;
@@ -100,6 +110,192 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
       }
     };
   }, [isOpen, pixCode, isExpired]);
+
+  // Polling para verificar status do pagamento
+  useEffect(() => {
+    // Limpar polling anterior
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+
+    // Só fazer polling se:
+    // - Modal estiver aberto
+    // - PIX foi gerado
+    // - Não expirou
+    // - Ainda não foi pago (verificar ref)
+    if (isOpen && umbrellaTransaction?.id && !isExpired && !isPaidRef.current) {
+      const checkPaymentStatus = async () => {
+        try {
+          const apiUrl = import.meta.env.VITE_API_URL || '/api';
+          const response = await fetch(`${apiUrl}/check-payment-status?transactionId=${umbrellaTransaction.id}`);
+          
+          if (!response.ok) {
+            console.warn('⚠️ Erro ao verificar status do pagamento:', response.status);
+            return;
+          }
+
+          const result = await response.json();
+          
+          if (result.success && result.isPaid) {
+            console.log('✅ Pagamento confirmado via polling!');
+            setIsPaid(true);
+            isPaidRef.current = true; // Marcar no ref também
+            
+            // Limpar polling
+            if (pollingRef.current) {
+              clearTimeout(pollingRef.current);
+              pollingRef.current = null;
+            }
+            
+            // Verificar se Purchase já foi disparado (via webhook)
+            // Se o status já está "pago" no banco, o webhook provavelmente já disparou
+            // Mas vamos disparar também para garantir (Facebook deduplica por order_id)
+            console.log('📤 Disparando Purchase via polling (webhook pode ter falhado)');
+            
+            // Disparar Purchase para Facebook Pixel
+            const regularItems = items.filter(item => !item.isGift);
+            const contents = regularItems.map(item => ({
+              id: item.id,
+              quantity: item.quantity,
+              item_price: item.price,
+            }));
+            
+            const nameParts = customerData?.name?.trim().split(/\s+/) || [];
+            const firstName = nameParts[0] || '';
+            const lastName = nameParts.slice(1).join(' ') || '';
+            
+            trackPurchase(
+              umbrellaTransaction.orderId || umbrellaTransaction.id,
+              finalPrice,
+              regularItems.reduce((sum, item) => sum + item.quantity, 0),
+              contents,
+              {
+                email: customerData?.email,
+                phone: customerData?.phone,
+                name: customerData?.name,
+                firstName: firstName,
+                lastName: lastName,
+                cpf: customerData?.cpf,
+                externalId: customerData?.cpf?.replace(/\D/g, ''),
+                address: customerData?.address ? {
+                  cidade: customerData.address.cidade,
+                  estado: customerData.address.estado,
+                  cep: customerData.address.cep,
+                  country: 'br',
+                } : undefined,
+              }
+            );
+            
+            console.log('✅ Purchase disparado via polling');
+            
+            // Marcar compra como concluída
+            if (isFirstPurchase()) {
+              markPurchaseCompleted();
+            }
+            
+            // Mostrar toast de sucesso
+            toast.success('Pagamento confirmado! Redirecionando...', { 
+              id: 'payment-confirmed',
+              duration: 3000 
+            });
+            
+            // Redirecionar para página de agradecimento após 2 segundos
+            setTimeout(() => {
+              try {
+                navigate('/thank-you', { 
+                  state: { 
+                    items: items,
+                    transaction: umbrellaTransaction,
+                    paymentPending: false,
+                  } 
+                });
+                onPaymentComplete();
+              } catch (error) {
+                console.error('Erro ao navegar:', error);
+                window.location.href = '/thank-you';
+              }
+            }, 2000);
+          }
+        } catch (error) {
+          console.error('❌ Erro ao verificar status do pagamento:', error);
+          // Não parar o polling por causa de um erro temporário
+        }
+      };
+
+      // Função para calcular intervalo progressivo baseado no tempo decorrido
+      const getPollingInterval = (): number => {
+        if (!pixGeneratedAtRef.current) return 10000; // Default 10s se não souber quando foi gerado
+        
+        const elapsedSeconds = (Date.now() - pixGeneratedAtRef.current) / 1000;
+        
+        if (elapsedSeconds <= 30) {
+          return 5000; // 0-30s: a cada 5s
+        } else if (elapsedSeconds <= 90) {
+          return 9000; // 30-90s: a cada 9s (média entre 8-10s)
+        } else if (elapsedSeconds <= 150) {
+          return 13500; // 90-150s: a cada 13.5s (média entre 12-15s)
+        } else {
+          return -1; // >150s: parar
+        }
+      };
+
+      // Função recursiva para polling progressivo
+      const scheduleNextCheck = () => {
+        if (pollingRef.current) {
+          clearTimeout(pollingRef.current);
+        }
+
+        const interval = getPollingInterval();
+        
+        if (interval === -1) {
+          console.log('⏸️ Polling parado (mais de 150s desde geração)');
+          pollingRef.current = null;
+          return;
+        }
+
+        pollingRef.current = setTimeout(() => {
+          // Verificar se ainda deve continuar o polling (usar ref para evitar problemas de closure)
+          if (!isOpen || !umbrellaTransaction?.id || isExpired || isPaidRef.current) {
+            pollingRef.current = null;
+            return;
+          }
+          
+          checkPaymentStatus().then(() => {
+            // Só agendar próxima verificação se ainda não foi pago (verificar ref)
+            if (!isPaidRef.current) {
+              scheduleNextCheck();
+            }
+          }).catch(() => {
+            // Em caso de erro, agendar próxima verificação mesmo assim (se ainda não foi pago)
+            if (!isPaidRef.current) {
+              scheduleNextCheck();
+            }
+          });
+        }, interval);
+      };
+
+      // Verificar imediatamente
+      checkPaymentStatus().then(() => {
+        // Só agendar próxima verificação se ainda não foi pago (verificar ref)
+        if (!isPaidRef.current) {
+          scheduleNextCheck();
+        }
+      }).catch(() => {
+        // Em caso de erro, agendar mesmo assim (se ainda não foi pago)
+        if (!isPaidRef.current) {
+          scheduleNextCheck();
+        }
+      });
+    }
+
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+    };
+  }, [isOpen, umbrellaTransaction?.id, isExpired, isPaid, items, finalPrice, customerData, isFirstPurchase, markPurchaseCompleted, navigate, onPaymentComplete]);
 
   // Formatar tempo restante
   const formatTime = (seconds: number): string => {
@@ -193,6 +389,7 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
           
           if (qrCode) {
             setPixCode(qrCode);
+            pixGeneratedAtRef.current = Date.now(); // Marcar quando PIX foi gerado
             console.log('✅ QR Code obtido com sucesso');
             
             // Disparar evento pix_gerado
@@ -240,9 +437,18 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
 
   // Gerar novo PIX
   const handleGenerateNewPix = async () => {
+    // Limpar polling anterior
+    if (pollingRef.current) {
+      clearTimeout(pollingRef.current);
+      pollingRef.current = null;
+    }
+    
     setPixCode('');
     setUmbrellaTransaction(null);
     setIsExpired(false);
+    setIsPaid(false);
+    isPaidRef.current = false; // Resetar ref
+    pixGeneratedAtRef.current = null; // Resetar timestamp
     setTimeRemaining(600);
     setIsProcessing(false);
     
