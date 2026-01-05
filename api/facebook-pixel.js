@@ -2,6 +2,18 @@
 // Rota: /api/facebook-pixel
 // ESM PURO - package.json tem "type": "module"
 
+import { createHash } from 'crypto';
+
+/**
+ * Faz hash SHA256 de dados PII (obrigatório pelo Facebook)
+ */
+function hashSHA256(value) {
+  if (!value) return undefined;
+  const normalized = String(value).toLowerCase().trim();
+  if (!normalized) return undefined;
+  return createHash('sha256').update(normalized).digest('hex');
+}
+
 export default async function handler(req, res) {
   try {
     // CORS
@@ -79,31 +91,45 @@ export default async function handler(req, res) {
       // fbp será adicionado via user_data
     }
 
-    // Adicionar user_data
+    // Adicionar user_data (OBRIGATÓRIO: fazer hash SHA256 de todos os dados PII)
     if (userData.email) {
-      eventData.user_data.em = userData.email.toLowerCase().trim();
+      const emailHash = hashSHA256(userData.email);
+      if (emailHash) eventData.user_data.em = emailHash;
     }
     if (userData.phone) {
       const phone = userData.phone.replace(/\D/g, '');
       if (phone.length >= 10) {
-        eventData.user_data.ph = phone;
+        const phoneHash = hashSHA256(phone);
+        if (phoneHash) eventData.user_data.ph = phoneHash;
       }
     }
     if (userData.firstName) {
-      eventData.user_data.fn = userData.firstName.trim();
+      const fnHash = hashSHA256(userData.firstName);
+      if (fnHash) eventData.user_data.fn = fnHash;
     }
     if (userData.lastName) {
-      eventData.user_data.ln = userData.lastName.trim();
+      const lnHash = hashSHA256(userData.lastName);
+      if (lnHash) eventData.user_data.ln = lnHash;
     }
     if (userData.externalId) {
-      eventData.user_data.external_id = userData.externalId;
+      const externalIdHash = hashSHA256(userData.externalId);
+      if (externalIdHash) eventData.user_data.external_id = externalIdHash;
     }
     if (userData.address) {
-      if (userData.address.cidade) eventData.user_data.ct = userData.address.cidade;
-      if (userData.address.estado) eventData.user_data.st = userData.address.estado;
-      if (userData.address.cep) {
-        eventData.user_data.zp = userData.address.cep.replace(/\D/g, '');
+      if (userData.address.cidade) {
+        const ctHash = hashSHA256(userData.address.cidade);
+        if (ctHash) eventData.user_data.ct = ctHash;
       }
+      if (userData.address.estado) {
+        const stHash = hashSHA256(userData.address.estado);
+        if (stHash) eventData.user_data.st = stHash;
+      }
+      if (userData.address.cep) {
+        const cep = userData.address.cep.replace(/\D/g, '');
+        const zpHash = hashSHA256(cep);
+        if (zpHash) eventData.user_data.zp = zpHash;
+      }
+      // country não precisa de hash (não é PII)
       if (userData.address.country) eventData.user_data.country = userData.address.country;
     }
 
