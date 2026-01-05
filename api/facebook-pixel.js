@@ -87,19 +87,10 @@ export default async function handler(req, res) {
       custom_data: {}
     };
 
-    // ✅ Adicionar fbc e fbp diretamente no eventData (formato correto para Conversions API)
+    // ✅ fbc e fbp serão adicionados DENTRO de user_data (não no root do evento)
+    // event_source_url pode ser útil para rastreamento, mas não é obrigatório
     if (fbc) {
-      eventData.fbc = fbc;
       eventData.event_source_url = req.headers.referer || req.headers.origin;
-      console.log('✅ fbc incluído no evento:', fbc);
-    } else {
-      console.warn('⚠️ fbc não fornecido - pode afetar atribuição de campanha');
-    }
-    if (fbp) {
-      eventData.fbp = fbp;
-      console.log('✅ fbp incluído no evento:', fbp);
-    } else {
-      console.warn('⚠️ fbp não fornecido - pode afetar atribuição de campanha');
     }
 
     // Adicionar user_data (OBRIGATÓRIO: fazer hash SHA256 de todos os dados PII)
@@ -144,6 +135,22 @@ export default async function handler(req, res) {
       if (userData.address.country) eventData.user_data.country = userData.address.country;
     }
 
+    // ✅ Adicionar fbc e fbp DENTRO de user_data (OBRIGATÓRIO pelo Facebook)
+    // ❌ NUNCA fora de user_data, NUNCA no root do evento, NUNCA em custom_data
+    if (fbc && fbc.trim() !== '') {
+      eventData.user_data.fbc = fbc;
+      console.log('✅ fbc adicionado em user_data:', fbc);
+    } else {
+      console.warn('⚠️ fbc não fornecido ou vazio');
+    }
+    
+    if (fbp && fbp.trim() !== '') {
+      eventData.user_data.fbp = fbp;
+      console.log('✅ fbp adicionado em user_data:', fbp);
+    } else {
+      console.warn('⚠️ fbp não fornecido ou vazio');
+    }
+
     // Adicionar custom_data
     if (value !== undefined) {
       eventData.custom_data.value = value;
@@ -178,7 +185,7 @@ export default async function handler(req, res) {
       eventData.custom_data.order_id = orderId;
     }
 
-    // fbc e fbp já foram adicionados acima no eventData
+    // ✅ fbc e fbp já foram adicionados DENTRO de user_data (não aqui)
 
     // Enviar para Facebook Conversions API
     const conversionsApiUrl = `https://graph.facebook.com/v18.0/${PIXEL_ID}/events`;
@@ -187,6 +194,18 @@ export default async function handler(req, res) {
       data: [eventData],
       access_token: ACCESS_TOKEN
     };
+
+    // ✅ Log de validação do user_data antes do POST
+    console.log('📦 [SERVER-SIDE] user_data enviado ao Facebook:', {
+      hasEmail: !!eventData.user_data.em,
+      hasPhone: !!eventData.user_data.ph,
+      hasFirstName: !!eventData.user_data.fn,
+      hasLastName: !!eventData.user_data.ln,
+      hasExternalId: !!eventData.user_data.external_id,
+      fbc: eventData.user_data.fbc || 'não fornecido',
+      fbp: eventData.user_data.fbp || 'não fornecido',
+      totalFields: Object.keys(eventData.user_data).length
+    });
 
     console.log('📤 [SERVER-SIDE] Payload para Facebook CAPI:', {
       pixelId: PIXEL_ID,
@@ -199,8 +218,9 @@ export default async function handler(req, res) {
       hasCustomData: Object.keys(eventData.custom_data).length > 0,
       contentsCount: eventData.custom_data.contents?.length || 0,
       contents: eventData.custom_data.contents || [],
-      fbc: eventData.fbc || 'não fornecido',
-      fbp: eventData.fbp || 'não fornecido',
+      // ✅ fbc/fbp estão DENTRO de user_data (não no root)
+      fbcInUserData: eventData.user_data.fbc || 'não fornecido',
+      fbpInUserData: eventData.user_data.fbp || 'não fornecido',
       endpoint: conversionsApiUrl
     });
 
