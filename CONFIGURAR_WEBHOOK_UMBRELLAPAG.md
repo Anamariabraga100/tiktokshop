@@ -152,3 +152,4 @@ Após configurar:
 Mesmo sem webhook configurado, o sistema ainda funciona através do polling melhorado que verifica o gateway automaticamente. Mas o webhook é mais rápido e eficiente!
 
 
+

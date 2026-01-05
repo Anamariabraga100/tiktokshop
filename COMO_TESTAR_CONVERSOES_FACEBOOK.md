@@ -227,3 +227,4 @@ Após seguir esses passos, você conseguirá verificar se as conversões estão 
 **Dica:** Use o Test Events para testes iniciais, depois verifique no Overview para confirmar que está funcionando em produção.
 
 
+

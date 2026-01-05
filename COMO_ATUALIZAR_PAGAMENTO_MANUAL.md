@@ -162,3 +162,4 @@ Frontend redireciona para /thank-you
 Agora o sistema detecta pagamentos mesmo se o webhook não funcionar! O polling verifica o gateway automaticamente e atualiza o banco quando necessário.
 
 
+

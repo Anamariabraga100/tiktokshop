@@ -1,413 +1,442 @@
-/**
- * Facebook Pixel Tracking Utility
- * 
- * Envia eventos para o Facebook Conversions API via servidor
- * para garantir que nenhuma venda seja perdida.
- */
+// Facebook Pixel Tracking Functions
 
-interface UserData {
-  email?: string;
-  phone?: string;
-  firstName?: string;
-  lastName?: string;
-  name?: string; // Nome completo (será dividido em firstName/lastName se necessário)
-  externalId?: string;
-  cpf?: string; // CPF do cliente (será usado como external_id)
-  clientIpAddress?: string;
-  clientUserAgent?: string;
-  fbc?: string; // Facebook Click ID
-  fbp?: string; // Facebook Browser ID
-  address?: {
-    city?: string;
-    cidade?: string;
-    state?: string;
-    estado?: string;
-    zipCode?: string;
-    cep?: string;
-    zip?: string;
-    country?: string;
-  };
-}
-
-interface CustomData {
-  currency?: string;
-  value?: number;
-  content_name?: string;
-  content_category?: string;
-  content_ids?: string[];
-  contents?: Array<{
-    id: string;
-    quantity: number;
-    item_price?: number;
-  }>;
-  num_items?: number;
-  order_id?: string;
-  content_type?: string;
-}
-
-interface EventData {
-  eventId?: string;
-  sourceUrl?: string;
-}
-
-/**
- * Envia evento para o Facebook Conversions API via servidor
- */
-export async function trackFacebookEvent(
-  eventName: string,
-  customData?: CustomData,
-  userData?: UserData,
-  eventData?: EventData
-): Promise<boolean> {
-  try {
-    // Obter dados do navegador (sempre disponíveis)
-    const clientUserAgent = navigator.userAgent || '';
-    const sourceUrl = window.location.href;
-    
-    // Tentar obter IP do cliente (opcional, mas útil)
-    let clientIpAddress = userData?.clientIpAddress;
-    if (!clientIpAddress) {
-      // Tentar obter via API externa (pode falhar, mas tentamos)
-      try {
-        const ipResponse = await fetch('https://api.ipify.org?format=json');
-        const ipData = await ipResponse.json();
-        clientIpAddress = ipData.ip;
-      } catch (ipError) {
-        // Ignorar erro de IP, não é crítico
-        console.warn('⚠️ Não foi possível obter IP do cliente:', ipError);
-      }
-    }
-    
-    // ⚠️ CRÍTICO: Capturar fbp e fbc do Facebook Pixel
-    // O Facebook Pixel cria esses cookies automaticamente quando inicializado
-    // Precisamos obter diretamente do Pixel ou dos cookies que ele cria
-    
-    // 1. Tentar obter fbp (Facebook Browser ID) do cookie _fbp
-    // O Facebook Pixel cria este cookie automaticamente no formato: fb.1.timestamp.random
-    let fbp = getCookie('_fbp') || '';
-    
-    // 2. Tentar obter fbc (Facebook Click ID) do cookie _fbc
-    // O Facebook Pixel cria este cookie quando há fbclid na URL
-    let fbc = getCookie('_fbc') || '';
-    
-    // 3. Se não tiver fbc no cookie, tentar criar a partir de fbclid na URL
-    // Isso é importante para capturar cliques do Facebook
-    if (!fbc) {
-      const urlParams = new URLSearchParams(window.location.search);
-      const fbclid = urlParams.get('fbclid');
-      if (fbclid) {
-        // Formato correto do fbc: fb.1.timestamp.fbclid
-        const timestamp = Date.now();
-        fbc = `fb.1.${timestamp}.${fbclid}`;
-        // Salvar no cookie para reutilizar (90 dias)
-        const expiresDate = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
-        document.cookie = `_fbc=${fbc}; expires=${expiresDate.toUTCString()}; path=/; SameSite=None; Secure`;
-        console.log('✅ fbc criado a partir de fbclid:', fbc.substring(0, 20) + '...');
-      }
-    }
-    
-    // 4. Se não tiver fbp, o Facebook Pixel deveria criar, mas vamos garantir
-    // Nota: Não devemos criar fbp manualmente se o Pixel não criou, pois pode causar problemas
-    // O fbp só deve ser criado pelo próprio Facebook Pixel
-    if (!fbp) {
-      console.warn('⚠️ _fbp não encontrado. O Facebook Pixel deve criar este cookie automaticamente.');
-    }
-    
-    // 5. Log para debug
-    if (fbc || fbp) {
-      console.log('📊 Facebook IDs capturados:', {
-        hasFbc: !!fbc,
-        hasFbp: !!fbp,
-        fbcPreview: fbc ? fbc.substring(0, 30) + '...' : 'não disponível',
-        fbpPreview: fbp ? fbp.substring(0, 30) + '...' : 'não disponível'
-      });
-    } else {
-      console.warn('⚠️ Nenhum Facebook ID (fbc/fbp) encontrado. Isso pode afetar a atribuição de campanha.');
-    }
-
-    // Preparar dados do usuário
-    // IMPORTANTE: clientUserAgent é sempre enviado (obrigatório para Facebook)
-    const userDataWithDefaults: UserData = {
-      ...userData,
-      clientUserAgent, // Sempre presente (obrigatório)
-    };
-    
-    // Adicionar campos opcionais apenas se tiverem valores
-    if (clientIpAddress) {
-      userDataWithDefaults.clientIpAddress = clientIpAddress;
-    }
-    
-    // ⚠️ CRÍTICO: Sempre enviar fbp e fbc se disponíveis
-    // Esses são os parâmetros mais importantes para atribuição de campanha
-    if (fbp && fbp.trim()) {
-      userDataWithDefaults.fbp = fbp.trim();
-      console.log('✅ fbp será enviado:', fbp.substring(0, 20) + '...');
-    } else {
-      console.warn('⚠️ fbp não disponível - pode afetar atribuição de campanha');
-    }
-    
-    if (fbc && fbc.trim()) {
-      userDataWithDefaults.fbc = fbc.trim();
-      console.log('✅ fbc será enviado:', fbc.substring(0, 20) + '...');
-    } else {
-      console.warn('⚠️ fbc não disponível - CRÍTICO para atribuição de campanha!');
-      console.warn('💡 Dica: Certifique-se de que o usuário clicou em um anúncio do Facebook (fbclid na URL)');
-    }
-
-    // Enviar para o servidor
-    const response = await fetch('/api/facebook-pixel', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        eventName,
-        eventData: {
-          ...eventData,
-          sourceUrl,
-        },
-        userData: userDataWithDefaults,
-        customData: {
-          currency: 'BRL',
-          ...customData,
-        },
-      }),
-    });
-
-    const result = await response.json();
-
-    if (!response.ok || !result.success) {
-      console.error('❌ Erro ao enviar evento para Facebook Pixel:', {
-        eventName,
-        status: response.status,
-        error: result.error,
-        details: result
-      });
-      return false;
-    }
-
-    console.log('✅✅✅ Evento enviado para Facebook Pixel com sucesso!', {
-      eventName,
-      eventId: result.eventId,
-      events_received: result.events_received
-    });
-    return true;
-
-  } catch (error) {
-    console.error('❌ Erro ao rastrear evento do Facebook Pixel:', error);
-    return false;
+declare global {
+  interface Window {
+    fbq?: (command: string, eventName: string, params?: any) => void;
+    _fbp?: string;
   }
 }
 
 /**
- * Eventos principais do e-commerce
+ * Obtém o Facebook Browser ID (fbp) - cookie do navegador
  */
+const getFbp = (): string | undefined => {
+  if (typeof document === 'undefined') return undefined;
+  
+  // Tentar obter do cookie _fbp
+  const cookies = document.cookie.split(';');
+  for (const cookie of cookies) {
+    const [name, value] = cookie.trim().split('=');
+    if (name === '_fbp') {
+      return value;
+    }
+  }
+  
+  // Tentar obter do window._fbp (se disponível)
+  if (window._fbp) {
+    return window._fbp;
+  }
+  
+  return undefined;
+};
 
-// PageView - Visualização de página
-export function trackPageView(pageName?: string): void {
-  trackFacebookEvent('PageView', {
-    content_name: pageName || window.location.pathname,
-    content_type: 'page',
-  });
+/**
+ * Obtém o Facebook Click ID (fbc) - parâmetro de URL do anúncio
+ */
+const getFbc = (): string | undefined => {
+  if (typeof document === 'undefined') return undefined;
+  
+  // Verificar se está na URL atual
+  const urlParams = new URLSearchParams(window.location.search);
+  const fbc = urlParams.get('fbclid');
+  if (fbc) {
+    // Formato: fb.1.{timestamp}.{click_id}
+    const timestamp = Date.now();
+    return `fb.1.${timestamp}.${fbc}`;
+  }
+  
+  // Verificar no localStorage (salvo quando usuário clica no anúncio)
+  try {
+    const savedFbc = localStorage.getItem('_fbc');
+    if (savedFbc) {
+      return savedFbc;
+    }
+  } catch (e) {
+    // Ignorar erro
+  }
+  
+  return undefined;
+};
+
+/**
+ * Salva fbc quando detectado na URL (quando usuário clica no anúncio)
+ */
+if (typeof window !== 'undefined') {
+  const urlParams = new URLSearchParams(window.location.search);
+  const fbclid = urlParams.get('fbclid');
+  if (fbclid) {
+    try {
+      const timestamp = Date.now();
+      const fbc = `fb.1.${timestamp}.${fbclid}`;
+      localStorage.setItem('_fbc', fbc);
+    } catch (e) {
+      // Ignorar erro se localStorage não estiver disponível
+    }
+  }
 }
 
-// ViewContent - Visualização de produto
-export function trackViewContent(
+/**
+ * Inicializa o Facebook Pixel
+ */
+export const initFacebookPixel = (pixelId: string) => {
+  if (typeof window === 'undefined') return;
+
+  // Verificar se já foi inicializado
+  if (window.fbq) {
+    console.log('Facebook Pixel já inicializado');
+    return;
+  }
+
+  // Carregar script do Facebook Pixel
+  (function(f: any, b: any, e: any, v: any, n?: any, t?: any, s?: any) {
+    if (f.fbq) return;
+    n = f.fbq = function() {
+      n.callMethod ? n.callMethod.apply(n, arguments) : n.queue.push(arguments);
+    };
+    if (!f._fbq) f._fbq = n;
+    n.push = n;
+    n.loaded = !0;
+    n.version = '2.0';
+    n.queue = [];
+    t = b.createElement(e);
+    t.async = !0;
+    t.src = v;
+    s = b.getElementsByTagName(e)[0];
+    s.parentNode?.insertBefore(t, s);
+  })(
+    window,
+    document,
+    'script',
+    'https://connect.facebook.net/en_US/fbevents.js'
+  );
+
+  // Inicializar pixel
+  window.fbq?.('init', pixelId);
+  window.fbq?.('track', 'PageView');
+};
+
+/**
+ * Rastreia visualização de página
+ */
+export const trackPageView = () => {
+  if (typeof window === 'undefined' || !window.fbq) return;
+  window.fbq('track', 'PageView');
+};
+
+/**
+ * Rastreia visualização de conteúdo (produto)
+ */
+export const trackViewContent = (
   productId: string,
   productName: string,
   price: number,
   category?: string
-): void {
-  trackFacebookEvent('ViewContent', {
+) => {
+  if (typeof window === 'undefined' || !window.fbq) return;
+  
+  const params: any = {
     content_name: productName,
     content_ids: [productId],
-    content_category: category,
+    content_type: 'product',
     value: price,
     currency: 'BRL',
-    content_type: 'product',
-  });
-}
+    content_category: category,
+  };
+  
+  // Adicionar fbc e fbp
+  const fbc = getFbc();
+  const fbp = getFbp();
+  if (fbc) params.fbc = fbc;
+  if (fbp) params.fbp = fbp;
+  
+  window.fbq('track', 'ViewContent', params);
+};
 
-// AddToCart - Adicionar ao carrinho
-export function trackAddToCart(
+/**
+ * Rastreia adicionar ao carrinho
+ */
+export const trackAddToCart = (
   productId: string,
   productName: string,
   price: number,
-  quantity: number = 1,
+  quantity: number,
   category?: string
-): void {
-  trackFacebookEvent('AddToCart', {
+) => {
+  if (typeof window === 'undefined' || !window.fbq) return;
+  
+  const params: any = {
     content_name: productName,
     content_ids: [productId],
-    content_category: category,
+    content_type: 'product',
     value: price * quantity,
     currency: 'BRL',
+    content_category: category,
     num_items: quantity,
-    contents: [
-      {
-        id: productId,
-        quantity,
-        item_price: price,
-      },
-    ],
-    content_type: 'product',
-  });
-}
+  };
+  
+  // Adicionar fbc e fbp
+  const fbc = getFbc();
+  const fbp = getFbp();
+  if (fbc) params.fbc = fbc;
+  if (fbp) params.fbp = fbp;
+  
+  window.fbq('track', 'AddToCart', params);
+};
 
-// InitiateCheckout - Iniciar checkout
-export function trackInitiateCheckout(
+/**
+ * Rastreia início de checkout
+ */
+export const trackInitiateCheckout = (
   value: number,
   numItems: number,
   contents: Array<{ id: string; quantity: number; item_price: number }>,
-  userData?: UserData
-): void {
-  trackFacebookEvent('InitiateCheckout', {
-    value,
+  userData?: {
+    email?: string;
+    phone?: string;
+    name?: string;
+    firstName?: string;
+    lastName?: string;
+    cpf?: string;
+    externalId?: string;
+    address?: {
+      cidade?: string;
+      estado?: string;
+      cep?: string;
+      country?: string;
+    };
+  }
+) => {
+  if (typeof window === 'undefined' || !window.fbq) return;
+  
+  const params: any = {
+    value: value,
     currency: 'BRL',
     num_items: numItems,
-    contents,
-    content_type: 'product',
-  }, userData);
-}
+    contents: contents,
+  };
 
-// Purchase - Compra concluída
-export function trackPurchase(
+  // Adicionar fbc e fbp para melhor correspondência
+  const fbc = getFbc();
+  const fbp = getFbp();
+  if (fbc) params.fbc = fbc;
+  if (fbp) params.fbp = fbp;
+
+  if (userData) {
+    params.user_data = {};
+    if (userData.email) params.user_data.em = userData.email;
+    if (userData.phone) params.user_data.ph = userData.phone.replace(/\D/g, '');
+    if (userData.firstName) params.user_data.fn = userData.firstName;
+    if (userData.lastName) params.user_data.ln = userData.lastName;
+    if (userData.externalId) params.user_data.external_id = userData.externalId;
+    
+    // Adicionar endereço completo
+    if (userData.address) {
+      if (userData.address.cep) params.user_data.ct = userData.address.cidade;
+      if (userData.address.estado) params.user_data.st = userData.address.estado;
+      if (userData.address.cep) params.user_data.zp = userData.address.cep.replace(/\D/g, '');
+      if (userData.address.country) params.user_data.country = userData.address.country;
+    }
+  }
+
+  window.fbq('track', 'InitiateCheckout', params);
+};
+
+/**
+ * Rastreia compra concluída
+ */
+export const trackPurchase = (
   orderId: string,
   value: number,
   numItems: number,
   contents: Array<{ id: string; quantity: number; item_price: number }>,
-  userData?: UserData
-): void {
-  console.log('📊 Enviando evento Purchase para Facebook Pixel:', {
+  userData?: {
+    email?: string;
+    phone?: string;
+    name?: string;
+    firstName?: string;
+    lastName?: string;
+    cpf?: string;
+    externalId?: string;
+    address?: {
+      cidade?: string;
+      estado?: string;
+      cep?: string;
+      country?: string;
+    };
+  }
+) => {
+  if (typeof window === 'undefined' || !window.fbq) return;
+  
+  const params: any = {
+    value: value,
+    currency: 'BRL',
+    num_items: numItems,
+    contents: contents,
+    order_id: orderId,
+  };
+
+  // Adicionar fbc e fbp para melhor correspondência (CRÍTICO para atribuição correta)
+  const fbc = getFbc();
+  const fbp = getFbp();
+  if (fbc) {
+    params.fbc = fbc;
+    console.log('✅ fbc incluído no Purchase:', fbc);
+  } else {
+    console.warn('⚠️ fbc não encontrado - pode afetar atribuição de campanha');
+  }
+  if (fbp) {
+    params.fbp = fbp;
+    console.log('✅ fbp incluído no Purchase:', fbp);
+  } else {
+    console.warn('⚠️ fbp não encontrado - pode afetar atribuição de campanha');
+  }
+
+  if (userData) {
+    params.user_data = {};
+    if (userData.email) params.user_data.em = userData.email;
+    if (userData.phone) {
+      const phone = userData.phone.replace(/\D/g, '');
+      params.user_data.ph = phone;
+      console.log('✅ Telefone incluído no Purchase');
+    }
+    if (userData.firstName) params.user_data.fn = userData.firstName;
+    if (userData.lastName) params.user_data.ln = userData.lastName;
+    if (userData.externalId) params.user_data.external_id = userData.externalId;
+    
+    // Adicionar endereço completo (importante para correspondência)
+    if (userData.address) {
+      if (userData.address.cidade) params.user_data.ct = userData.address.cidade;
+      if (userData.address.estado) params.user_data.st = userData.address.estado;
+      if (userData.address.cep) {
+        params.user_data.zp = userData.address.cep.replace(/\D/g, '');
+        console.log('✅ CEP incluído no Purchase');
+      }
+      if (userData.address.country) params.user_data.country = userData.address.country;
+    }
+  }
+
+  console.log('📊 Enviando Purchase com parâmetros completos:', {
     orderId,
     value,
     numItems,
-    contentsCount: contents.length,
-    hasUserData: !!userData
+    hasFbc: !!fbc,
+    hasFbp: !!fbp,
+    hasPhone: !!(userData?.phone),
+    hasAddress: !!(userData?.address),
   });
 
-  trackFacebookEvent('Purchase', {
-    order_id: orderId,
-    value,
+  window.fbq('track', 'Purchase', params);
+  
+  console.log('✅✅✅ Purchase enviado com fbc/fbp para melhor atribuição de campanha');
+};
+
+/**
+ * Rastreia evento personalizado PIX gerado
+ */
+export const trackPixGerado = (value: number, transactionId?: string) => {
+  if (typeof window === 'undefined' || !window.fbq) return;
+  
+  const params: any = {
+    value: value,
     currency: 'BRL',
-    num_items: numItems,
-    contents,
-    content_type: 'product',
-  }, userData);
-}
-
-// Search - Busca de produtos
-export function trackSearch(searchTerm: string): void {
-  trackFacebookEvent('Search', {
-    content_name: searchTerm,
-    content_type: 'search',
-  });
-}
-
-// AddPaymentInfo - Adicionar informações de pagamento
-export function trackAddPaymentInfo(
-  value: number,
-  currency: string = 'BRL',
-  contents?: Array<{ id: string; quantity: number; item_price: number }>
-): void {
-  trackFacebookEvent('AddPaymentInfo', {
-    value,
-    currency,
-    contents,
-    content_type: 'product',
-  });
-}
-
-/**
- * Funções auxiliares
- */
-
-function getCookie(name: string): string | null {
-  const value = `; ${document.cookie}`;
-  const parts = value.split(`; ${name}=`);
-  if (parts.length === 2) {
-    return parts.pop()?.split(';').shift() || null;
-  }
-  return null;
-}
-
-function getFbcFromUrl(): string | null {
-  const urlParams = new URLSearchParams(window.location.search);
-  return urlParams.get('fbclid') ? `fb.1.${Date.now()}.${urlParams.get('fbclid')}` : null;
-}
-
-/**
- * Inicializar Facebook Pixel (script básico para rastreamento no navegador também)
- */
-export function initFacebookPixel(pixelId: string): void {
-  if (typeof window === 'undefined') {
-    console.warn('⚠️ initFacebookPixel: window não está disponível');
-    return; // Não está no navegador
-  }
-
-  // Verificar se já foi inicializado
-  if ((window as any).fbq) {
-    console.log('ℹ️ Facebook Pixel já inicializado');
-    return;
-  }
-
-  console.log('🚀 Inicializando Facebook Pixel com ID:', pixelId);
-
-  // Criar script do Facebook Pixel
-  // ⚠️ IMPORTANTE: O Pixel precisa ser inicializado ANTES de qualquer evento
-  // para que ele crie os cookies _fbp e _fbc automaticamente
-  const script = document.createElement('script');
-  script.id = 'facebook-pixel-script';
-  script.innerHTML = `
-    !function(f,b,e,v,n,t,s)
-    {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-    n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-    if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-    n.queue=[];t=b.createElement(e);t.async=!0;
-    t.src=v;s=b.getElementsByTagName(e)[0];
-    s.parentNode.insertBefore(t,s)}(window, document,'script',
-    'https://connect.facebook.net/en_US/fbevents.js');
-    fbq('init', '${pixelId}', {
-      // Configurações para melhor captura de dados
-      autoConfig: true,
-      debug: false
-    });
-    
-    // Verificar se cookies foram criados
-    setTimeout(function() {
-      var fbp = document.cookie.match(/_fbp=([^;]+)/);
-      var fbc = document.cookie.match(/_fbc=([^;]+)/);
-      console.log('📊 Facebook Pixel - Cookies criados:', {
-        hasFbp: !!fbp,
-        hasFbc: !!fbc
-      });
-    }, 1000);
-    
-    console.log('✅ Facebook Pixel inicializado com sucesso');
-  `;
+    transaction_id: transactionId,
+  };
   
-  // Adicionar listener para quando o script carregar
-  script.onload = () => {
-    console.log('✅ Script do Facebook Pixel carregado');
-    if ((window as any).fbq) {
-      (window as any).fbq('track', 'PageView');
-      console.log('✅ PageView rastreado');
+  // Adicionar fbc e fbp
+  const fbc = getFbc();
+  const fbp = getFbp();
+  if (fbc) params.fbc = fbc;
+  if (fbp) params.fbp = fbp;
+  
+  window.fbq('trackCustom', 'pix_gerado', params);
+};
+
+/**
+ * Rastreia evento personalizado PIX copiado
+ */
+export const trackPixCopiado = (value: number, transactionId?: string) => {
+  if (typeof window === 'undefined' || !window.fbq) return;
+  
+  const params: any = {
+    value: value,
+    currency: 'BRL',
+    transaction_id: transactionId,
+  };
+  
+  // Adicionar fbc e fbp
+  const fbc = getFbc();
+  const fbp = getFbp();
+  if (fbc) params.fbc = fbc;
+  if (fbp) params.fbp = fbp;
+  
+  window.fbq('trackCustom', 'pix_copiado', params);
+};
+
+/**
+ * Rastreia evento personalizado PIX pago
+ */
+export const trackPixPago = (
+  value: number, 
+  transactionId?: string, 
+  orderId?: string,
+  userData?: {
+    email?: string;
+    phone?: string;
+    firstName?: string;
+    lastName?: string;
+    externalId?: string;
+    address?: {
+      cidade?: string;
+      estado?: string;
+      cep?: string;
+      country?: string;
+    };
+  }
+) => {
+  if (typeof window === 'undefined' || !window.fbq) return;
+  
+  const params: any = {
+    value: value,
+    currency: 'BRL',
+    transaction_id: transactionId,
+    order_id: orderId,
+  };
+  
+  // Adicionar fbc e fbp (CRÍTICO para atribuição)
+  const fbc = getFbc();
+  const fbp = getFbp();
+  if (fbc) {
+    params.fbc = fbc;
+    console.log('✅ fbc incluído no pix_pago:', fbc);
+  }
+  if (fbp) {
+    params.fbp = fbp;
+    console.log('✅ fbp incluído no pix_pago:', fbp);
+  }
+  
+  // Adicionar user_data se disponível
+  if (userData) {
+    params.user_data = {};
+    if (userData.email) params.user_data.em = userData.email;
+    if (userData.phone) {
+      params.user_data.ph = userData.phone.replace(/\D/g, '');
+      console.log('✅ Telefone incluído no pix_pago');
     }
-  };
-  
-  script.onerror = () => {
-    console.error('❌ Erro ao carregar script do Facebook Pixel');
-  };
-  
-  document.head.appendChild(script);
-
-  // Também criar noscript para casos sem JavaScript
-  const existingNoscript = document.getElementById('facebook-pixel-noscript');
-  if (!existingNoscript) {
-    const noscript = document.createElement('noscript');
-    noscript.id = 'facebook-pixel-noscript';
-    noscript.innerHTML = `<img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=${pixelId}&ev=PageView&noscript=1"/>`;
-    document.body.appendChild(noscript);
+    if (userData.firstName) params.user_data.fn = userData.firstName;
+    if (userData.lastName) params.user_data.ln = userData.lastName;
+    if (userData.externalId) params.user_data.external_id = userData.externalId;
+    
+    if (userData.address) {
+      if (userData.address.cidade) params.user_data.ct = userData.address.cidade;
+      if (userData.address.estado) params.user_data.st = userData.address.estado;
+      if (userData.address.cep) {
+        params.user_data.zp = userData.address.cep.replace(/\D/g, '');
+        console.log('✅ CEP incluído no pix_pago');
+      }
+      if (userData.address.country) params.user_data.country = userData.address.country;
+    }
   }
-}
-
+  
+  window.fbq('trackCustom', 'pix_pago', params);
+  console.log('✅ pix_pago enviado com fbc/fbp para melhor atribuição');
+};

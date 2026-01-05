@@ -512,7 +512,7 @@ export const ProductDrawer = memo(({ product, isOpen, onClose, onBuyNow, onProdu
                   <div className="flex items-center gap-1">
                     <span className="text-success text-sm md:text-base font-medium flex items-center gap-1">
                       <Truck className="w-4 h-4" />
-                      Frete grátis acima de R$99
+                      Frete grátis acima de R$50
                     </span>
                   </div>
                 )}
@@ -660,7 +660,7 @@ export const ProductDrawer = memo(({ product, isOpen, onClose, onBuyNow, onProdu
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-1">
                               <span className="text-xl font-bold text-primary">
-                                {coupon.discountPercent}% OFF
+                                {coupon.discountPercent > 0 ? `${coupon.discountPercent}% OFF` : 'Brinde'}
                               </span>
                               {coupon.isActivated && (
                                 <CheckCircle2 className="w-4 h-4 text-success flex-shrink-0" />

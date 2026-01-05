@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Copy, Check, QrCode } from 'lucide-react';
-import { useState, useEffect, useMemo } from 'react';
+import { Copy, Check, QrCode, Clock, Shield, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useCart } from '@/context/CartContext';
@@ -8,6 +8,7 @@ import { useCoupons } from '@/context/CouponContext';
 import { useCustomer } from '@/context/CustomerContext';
 import { saveOrderToSupabase, OrderRow } from '@/lib/supabase';
 import { createPixTransaction } from '@/lib/umbrellapag';
+import { trackPixGerado, trackPixCopiado } from '@/lib/facebookPixel';
 
 interface PixPaymentModalProps {
   isOpen: boolean;
@@ -18,26 +19,19 @@ interface PixPaymentModalProps {
 export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPaymentModalProps) => {
   const { totalPrice, items } = useCart();
   const { getApplicableCoupon, isFirstPurchase, markPurchaseCompleted } = useCoupons();
-  const { customerData, hasAddress } = useCustomer();
+  const { customerData } = useCustomer();
   const [copied, setCopied] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [pixCode, setPixCode] = useState<string>('');
   const [umbrellaTransaction, setUmbrellaTransaction] = useState<any>(null);
-  const [transactionCreated, setTransactionCreated] = useState(false); // Proteção contra múltiplos cliques
-  const [transactionId, setTransactionId] = useState<string | null>(null); // ID da transação para polling
+  const [timeRemaining, setTimeRemaining] = useState<number>(600); // 10 minutos em segundos
+  const [isExpired, setIsExpired] = useState(false);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
   const navigate = useNavigate();
 
-  // Calcular valor final com desconto PIX de 10% (simulação)
+  // Calcular valor final (sem desconto PIX)
   // Mesma lógica do CartDrawer para consistência
   const safeTotalPrice = totalPrice || 0;
-  
-  // Verificar frete grátis (mesma lógica do CartDrawer)
-  const freeShippingThreshold = 99;
-  const freeShippingFromThankYou = localStorage.getItem('freeShippingFromThankYou') === 'true';
-  const hasFreeShipping = safeTotalPrice >= freeShippingThreshold || freeShippingFromThankYou;
-  
-  // Aplicar cupom de R$5 apenas na primeira compra
-  const firstPurchaseDiscount = items.length > 0 && isFirstPurchase() ? 5 : 0;
   
   // Outros cupons percentuais são aplicados se ativos
   const applicableCoupon = getApplicableCoupon(safeTotalPrice);
@@ -45,55 +39,79 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
     ? (safeTotalPrice * applicableCoupon.discountPercent) / 100
     : 0;
   
-  // Total de desconto de cupons (R$5 fixo + outros cupons)
-  const couponDiscount = firstPurchaseDiscount + otherCouponDiscount;
+  // Total de desconto de cupons (sem desconto de primeira compra)
+  const couponDiscount = otherCouponDiscount;
   const priceAfterCoupon = safeTotalPrice - couponDiscount;
   
-  // PIX tem 10% de desconto adicional
-  const pixDiscount = priceAfterCoupon * 0.1;
-  const priceAfterPix = priceAfterCoupon - pixDiscount;
-  
-  // Calcular frete (usar o mesmo valor do CartDrawer para manter consistência)
-  const shippingPrice = useMemo(() => {
-    if (!hasAddress) {
-      return 0;
+  // PIX não tem desconto adicional
+  const pixDiscount = 0;
+  const finalPrice = priceAfterCoupon;
+
+  // Calcular frete grátis (threshold R$ 50)
+  const freeShippingThreshold = 50;
+  const freeShippingFromThankYou = localStorage.getItem('freeShippingFromThankYou') === 'true';
+  const hasFreeShipping = safeTotalPrice >= freeShippingThreshold || freeShippingFromThankYou;
+  const shippingPrice = hasFreeShipping ? 0 : 9.90;
+
+  // Formatar resumo do pedido
+  const regularItems = items.filter(item => !item.isGift);
+  const productNames = regularItems.map(item => {
+    const name = item.name.length > 30 ? item.name.substring(0, 30) + '...' : item.name;
+    return item.quantity > 1 ? `${name} (${item.quantity}x)` : name;
+  });
+  const orderSummary = productNames.length > 0 
+    ? productNames.join(' + ')
+    : 'Produto';
+
+  // Resetar timer quando novo PIX for gerado
+  useEffect(() => {
+    if (pixCode && !isExpired) {
+      setTimeRemaining(600); // Resetar para 10 minutos
+      setIsExpired(false);
     }
-    
-    // IMPORTANTE: Se tem frete grátis, sempre retornar 0
-    if (hasFreeShipping) {
-      return 0;
+  }, [pixCode, isExpired]);
+
+  // Timer regressivo
+  useEffect(() => {
+    // Limpar timer anterior sempre que as dependências mudarem
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
     }
-    
-    // Se não tem frete grátis, usar valor salvo do CartDrawer ou calcular
-    const savedShippingPrice = localStorage.getItem('currentShippingPrice');
-    if (savedShippingPrice) {
-      const saved = parseFloat(savedShippingPrice);
-      // Se o valor salvo for 0 mas não tem frete grátis, recalcular
-      if (saved === 0 && !hasFreeShipping) {
-        const calculated = 10.80 + Math.random() * (18.90 - 10.80);
-        localStorage.setItem('currentShippingPrice', calculated.toString());
-        return calculated;
+
+    if (isOpen && pixCode && !isExpired) {
+      timerRef.current = setInterval(() => {
+        setTimeRemaining((prev) => {
+          if (prev <= 1) {
+            setIsExpired(true);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
       }
-      return saved;
-    }
-    
-    // Se não tiver salvo, calcular (fallback)
-    const calculated = 10.80 + Math.random() * (18.90 - 10.80);
-    localStorage.setItem('currentShippingPrice', calculated.toString());
-    return calculated;
-  }, [hasAddress, hasFreeShipping]);
-  
-  // Valor final incluindo frete (IMPORTANTE: deve incluir frete como no CartDrawer)
-  const finalPrice = priceAfterPix + shippingPrice;
+    };
+  }, [isOpen, pixCode, isExpired]);
+
+  // Formatar tempo restante
+  const formatTime = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
 
   // Criar transação PIX no UmbrellaPag quando o modal abrir
   useEffect(() => {
-    // Proteção contra múltiplos cliques: só criar se não foi criada ainda
-    if (isOpen && customerData && items.length > 0 && !pixCode && !isProcessing && !transactionCreated) {
+    if (isOpen && customerData && items.length > 0 && !pixCode && !isProcessing) {
       const createTransaction = async () => {
         try {
           setIsProcessing(true);
-          setTransactionCreated(true); // Marcar que está criando
           
           // Validar dados do cliente antes de criar transação (validação rigorosa)
           const cpfNormalized = customerData.cpf?.replace(/\D/g, '') || '';
@@ -145,18 +163,8 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
               cpf: cpfNormalized.substring(0, 3) + '***',
             },
             itemsCount: items.length,
-            calculo: {
-              subtotal: safeTotalPrice,
-              descontoCupom: couponDiscount,
-              precoAposCupom: priceAfterCoupon,
-              descontoPix: pixDiscount,
-              precoAposPix: priceAfterPix,
-              frete: shippingPrice,
-              totalFinal: finalPrice,
-            },
             totalPrice: finalPrice,
             hasAddress: !!customerData.address,
-            hasFreeShipping: hasFreeShipping,
           });
           
           // Criar transação no UmbrellaPag
@@ -172,30 +180,21 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
           
           console.log('✅ Transação criada:', {
             id: transaction.id,
-            transactionId: transaction.transactionId || transaction.id,
             status: transaction.status,
             hasQrCode: !!(transaction.qrCode || transaction.pix?.qrCode),
           });
           
           setUmbrellaTransaction(transaction);
           
-          // Salvar transactionId para polling
-          // A resposta vem como: { id, transactionId, ... } ou { data: { id, transactionId, ... } }
-          const txId = transaction.transactionId || transaction.id || transaction.data?.transactionId || transaction.data?.id;
-          if (txId) {
-            setTransactionId(txId);
-            console.log('📝 TransactionId salvo para polling:', txId);
-          } else {
-            console.warn('⚠️ TransactionId não encontrado na resposta:', transaction);
-          }
-          
           // Obter QR Code PIX (pode estar em diferentes campos)
           const qrCode = transaction.qrCode || transaction.pix?.qrCode || transaction.pix?.qrCodeImage || '';
           
           if (qrCode) {
             setPixCode(qrCode);
-            setIsProcessing(false); // QR Code gerado, não está mais processando
             console.log('✅ QR Code obtido com sucesso');
+            
+            // Disparar evento pix_gerado
+            trackPixGerado(finalPrice, transaction.id);
           } else {
             // Tentar obter o QR Code da URL segura ou outros campos
             if (transaction.secureUrl) {
@@ -211,7 +210,6 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
           }
         } catch (error: any) {
           console.error('❌ Erro ao criar transação PIX:', error);
-          setTransactionCreated(false); // Resetar em caso de erro para permitir nova tentativa
           
           let errorMessage = 'Erro ao criar transação PIX. Tente novamente.';
           
@@ -231,220 +229,70 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
           setPixCode('');
           setUmbrellaTransaction(null);
           setIsProcessing(false); // Resetar aqui também
-          setTransactionCreated(false); // Resetar flag em caso de erro
         }
       };
-
+      
       createTransaction();
     }
-  }, [isOpen, customerData, items, finalPrice, isFirstPurchase, pixCode, isProcessing, transactionCreated]);
+  }, [isOpen, customerData, items, finalPrice, isFirstPurchase, pixCode, isProcessing]);
 
-  // Resetar flag quando modal fechar (proteção contra múltiplos cliques)
-  useEffect(() => {
-    if (!isOpen) {
-      setTransactionCreated(false);
-      setIsProcessing(false);
-      setTransactionId(null); // Resetar transactionId ao fechar
-    }
-  }, [isOpen]);
-
-  // Polling para verificar status do pagamento
-  // ⚠️ IMPORTANTE: Backend é a fonte da verdade. Frontend apenas detecta mudanças.
-  useEffect(() => {
-    if (!isOpen || !transactionId || !pixCode) {
-      return; // Não fazer polling se modal fechado, sem transactionId ou sem QR Code
-    }
-
-    console.log('🔄 Iniciando polling para transactionId:', transactionId);
-
-    // Flag para controlar se o componente ainda está montado
-    let isMounted = true;
-    let interval: NodeJS.Timeout | null = null;
-
-    const checkPaymentStatus = async () => {
-      // Verificar se componente ainda está montado
-      if (!isMounted) {
-        console.log('🛑 Componente desmontado, parando polling');
-        return;
-      }
-
+  // Gerar novo PIX
+  const handleGenerateNewPix = async () => {
+    setPixCode('');
+    setUmbrellaTransaction(null);
+    setIsExpired(false);
+    setTimeRemaining(600);
+    setIsProcessing(false);
+    
+    // Forçar recriação da transação
+    const createTransaction = async () => {
       try {
-        console.log('🔄 Verificando status do pagamento...', {
-          transactionId: transactionId?.substring(0, 8) + '...',
-          timestamp: new Date().toISOString()
-        });
-
-        const response = await fetch(`/api/order-status?transactionId=${transactionId}`);
-        const data = await response.json();
-
-        // Verificar novamente se componente ainda está montado após fetch
-        if (!isMounted) {
-          console.log('🛑 Componente desmontado após fetch, parando');
-          return;
-        }
-
-        if (!response.ok || !data.success) {
-          console.warn('⚠️ Erro ao verificar status:', {
-            status: response.status,
-            error: data.error || 'Erro desconhecido',
-            data: data
-          });
-          return; // Continuar tentando
-        }
-
-        console.log('📊 Status verificado:', {
-          transactionId,
-          status: data.status,
-          source: data.source, // 'database', 'gateway', 'database_updated_by_polling'
-          timestamp: new Date().toISOString(),
-          paidAt: data.paidAt
-        });
-
-        // ⚠️ IMPORTANTE: Status vem do backend (fonte da verdade)
-        // Verificar se pagamento foi confirmado (pode vir como 'PAID', 'paid', 'pago')
-        const isPaid = data.status === 'PAID' || 
-                      data.status === 'paid' || 
-                      data.status === 'pago' ||
-                      (data.source === 'database_updated_by_polling' && data.status === 'PAID');
-
-        if (isPaid) {
-          console.log('✅✅✅ PAGAMENTO CONFIRMADO - Status:', data.status, 'Source:', data.source);
-          console.log('✅✅✅ PAGAMENTO CONFIRMADO - INICIANDO REDIRECIONAMENTO ✅✅✅');
-          
-          // Parar polling imediatamente
-          if (interval) {
-            clearInterval(interval);
-            interval = null;
-            console.log('🛑 Polling parado');
+        setIsProcessing(true);
+        
+        const transaction = await createPixTransaction(
+          customerData!,
+          items,
+          finalPrice,
+          {
+            orderId: Math.random().toString(36).substring(2, 10).toUpperCase(),
+            isFirstPurchase: isFirstPurchase(),
           }
-          
-          // Marcar compra como concluída se for primeira compra
-          if (isFirstPurchase()) {
-            markPurchaseCompleted();
-            console.log('✅ Primeira compra marcada como concluída');
-          }
-          
-          // Preparar dados para navegação
-          const navigationState = {
-            items: items,
-            transaction: umbrellaTransaction,
-            paymentPending: false, // Pagamento confirmado pelo backend
-            transactionId: transactionId,
-          };
-          
-          // Salvar state no sessionStorage ANTES de navegar (garantir que dados estejam disponíveis)
-          try {
-            sessionStorage.setItem('thankYouState', JSON.stringify(navigationState));
-            localStorage.setItem('paymentConfirmed', 'true');
-            localStorage.setItem('paymentConfirmedTransactionId', transactionId || '');
-            console.log('✅✅✅ DADOS SALVOS:', { 
-              transactionId, 
-              itemsCount: items.length,
-              sessionStorage: 'OK',
-              localStorage: 'OK'
-            });
-          } catch (storageError) {
-            console.error('❌ Erro ao salvar dados:', storageError);
-          }
-          
-          // Marcar isMounted como false para evitar que o cleanup interfira
-          isMounted = false;
-          console.log('✅ isMounted = false');
-          
-          // Mostrar toast de sucesso
-          toast.success('Pagamento confirmado! Redirecionando...', {
-            id: 'payment-confirmed',
-            duration: 1000
-          });
-          
-          // TESTE: Múltiplas tentativas de redirecionamento
-          console.log('🚀 TENTATIVA 1: window.location.replace');
-          try {
-            window.location.replace('/thank-you');
-            console.log('✅ window.location.replace executado');
-          } catch (error) {
-            console.error('❌ Erro em window.location.replace:', error);
-          }
-          
-          // Fallback 1: window.location.href
-          setTimeout(() => {
-            console.log('🚀 TENTATIVA 2: window.location.href (fallback)');
-            if (window.location.pathname !== '/thank-you') {
-              window.location.href = '/thank-you';
-            }
-          }, 100);
-          
-          // Fallback 2: navigate do React Router
-          setTimeout(() => {
-            console.log('🚀 TENTATIVA 3: navigate (fallback)');
-            if (window.location.pathname !== '/thank-you') {
-              try {
-                navigate('/thank-you', { 
-                  state: navigationState,
-                  replace: true 
-                });
-              } catch (error) {
-                console.error('❌ Erro em navigate:', error);
-              }
-            }
-          }, 200);
-          
-          // Fallback 3: Último recurso
-          setTimeout(() => {
-            console.log('🚀 TENTATIVA 4: Último recurso - window.location');
-            if (window.location.pathname !== '/thank-you') {
-              window.location = '/thank-you' as any;
-            }
-          }, 300);
-        } else if (data.status === 'EXPIRED') {
-          console.warn('⏰ PIX expirado');
-          toast.error('O PIX expirou. Gere um novo código.', {
-            id: 'pix-expired',
-            duration: 5000
-          });
-          // Parar polling se expirou
-          if (interval) {
-            clearInterval(interval);
-            interval = null;
-          }
+        );
+        
+        setUmbrellaTransaction(transaction);
+        const qrCode = transaction.qrCode || transaction.pix?.qrCode || transaction.pix?.qrCodeImage || '';
+        
+        if (qrCode) {
+          setPixCode(qrCode);
+          trackPixGerado(finalPrice, transaction.id);
         }
       } catch (error: any) {
-        console.error('❌ Erro ao verificar status do pagamento:', error);
-        // Não mostrar erro para o usuário, apenas logar
-        // Continuar tentando apenas se componente ainda estiver montado
-        if (!isMounted) {
-          return;
-        }
+        console.error('❌ Erro ao gerar novo PIX:', error);
+        toast.error('Erro ao gerar novo código PIX. Tente novamente.');
+        setIsProcessing(false);
       }
     };
-
-    // Verificar imediatamente
-    checkPaymentStatus();
-
-    // Configurar polling a cada 5 segundos
-    interval = setInterval(checkPaymentStatus, 5000);
-
-    // Cleanup: parar polling em TODOS os cenários possíveis
-    // 1. Modal fecha manualmente
-    // 2. Componente desmonta
-    // 3. transactionId muda
-    // 4. Navegação para outra página
-    return () => {
-      console.log('🛑 Cleanup: Parando polling (modal fechado/desmontado)');
-      isMounted = false; // Marcar como desmontado
-      if (interval) {
-        clearInterval(interval);
-        interval = null;
-      }
-    };
-  }, [isOpen, transactionId, pixCode, items, umbrellaTransaction, navigate, onClose, isFirstPurchase, markPurchaseCompleted]);
+    
+    await createTransaction();
+  };
 
   const handleCopy = async () => {
+    if (!pixCode || isExpired) return;
+    
     try {
       await navigator.clipboard.writeText(pixCode);
       setCopied(true);
-      toast.success('Código PIX copiado!');
-      setTimeout(() => setCopied(false), 2000);
+      
+      // Disparar evento pix_copiado
+      trackPixCopiado(finalPrice, umbrellaTransaction?.id);
+      
+      // Haptic feedback no mobile (se disponível)
+      if ('vibrate' in navigator) {
+        navigator.vibrate(50); // Vibração curta de 50ms
+      }
+      
+      // Feedback visual - manter por 2.5 segundos
+      setTimeout(() => setCopied(false), 2500);
     } catch (err) {
       toast.error('Erro ao copiar código');
     }
@@ -558,185 +406,197 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
     }
   };
 
-  // Debug: verificar se o modal está sendo renderizado
+  // Prevenir scroll do body quando modal estiver aberto
   useEffect(() => {
     if (isOpen) {
-      console.log('PixPaymentModal está aberto');
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
     }
+    
+    return () => {
+      document.body.style.overflow = '';
+    };
   }, [isOpen]);
 
   return (
     <AnimatePresence>
       {isOpen && (
-        <>
-          {/* Backdrop */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-            className="fixed inset-0 bg-black/60 z-[100]"
-          />
-
-          {/* Modal */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            className="fixed inset-0 z-[101] flex items-center justify-center p-4 pointer-events-none"
-          >
-            <div 
-              className="bg-card rounded-3xl p-6 max-w-md w-full shadow-2xl pointer-events-auto max-h-[90vh] overflow-y-auto"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-2">
-                  <QrCode className="w-6 h-6 text-primary" />
-                  <h2 className="text-xl font-bold">Pagamento PIX</h2>
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[100] bg-background overflow-y-auto"
+        >
+          <div className="min-h-screen flex flex-col">
+            {/* Header Fixo com Timer de Reserva */}
+            {pixCode && !isExpired && (
+              <div className="sticky top-0 z-20 bg-orange-50 dark:bg-orange-950/20 border-b border-orange-200 dark:border-orange-800 px-4 py-3">
+                <div className="flex items-center justify-center gap-2">
+                  <Clock className="w-4 h-4 text-orange-600 dark:text-orange-400" />
+                  <p className="text-sm font-semibold text-foreground">
+                    ⏳ Seu pedido está reservado por <span className="font-mono text-base text-orange-600 dark:text-orange-400">{formatTime(timeRemaining)}</span>
+                  </p>
                 </div>
-                <button
-                  onClick={onClose}
-                  className="p-2 rounded-full hover:bg-muted transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
               </div>
+            )}
 
-              {/* Amount */}
+            {/* Header */}
+            <div className="flex-shrink-0 px-4 pt-6 pb-4">
+              <div className="flex items-center justify-center gap-2 mb-4">
+                <QrCode className="w-6 h-6 text-primary" />
+                <h1 className="text-2xl font-bold">Pagamento via PIX</h1>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 px-4 pb-24">
+              {/* Valor */}
               <div className="text-center mb-6">
-                <p className="text-sm text-muted-foreground mb-2">Valor a pagar</p>
-                <p className="text-4xl font-bold text-primary">
+                <p className="text-4xl font-bold text-primary mb-3">
                   R$ {finalPrice.toFixed(2).replace('.', ',')}
                 </p>
-                {pixDiscount > 0 && (
-                  <p className="text-sm text-success mt-2">
-                    Desconto PIX (10%): R$ {pixDiscount.toFixed(2).replace('.', ',')}
+                <div className="flex items-center justify-center gap-2 bg-green-50 dark:bg-green-950/20 px-4 py-2.5 rounded-full mx-auto max-w-md border border-green-200 dark:border-green-800">
+                  <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-400" />
+                  <p className="text-sm font-semibold text-green-700 dark:text-green-300">
+                    Pagamento seguro • Confirmação automática
                   </p>
-                )}
+                </div>
               </div>
 
-              {/* Error Message */}
-              {!pixCode && !isProcessing && (
+              {/* Resumo do Pedido */}
+              <div className="mb-4 px-4">
+                <p className="text-sm text-foreground text-center">
+                  <span className="font-medium">📦 {orderSummary}</span>
+                  <br />
+                  <span className="text-muted-foreground">
+                    🚚 {hasFreeShipping ? 'Frete grátis' : `Frete: R$ ${shippingPrice.toFixed(2).replace('.', ',')}`} • Entrega para todo o Brasil
+                  </span>
+                </p>
+              </div>
+
+
+              {/* Status de expiração */}
+              {isExpired && pixCode && (
                 <div className="mb-6 p-4 bg-destructive/10 border border-destructive/20 rounded-xl">
-                  <p className="text-sm text-destructive font-medium mb-2">
-                    ⚠️ Erro ao gerar QR Code PIX
+                  <p className="text-sm text-destructive font-medium text-center mb-3">
+                    ⚠️ Código PIX expirado
                   </p>
-                  <p className="text-xs text-destructive/80">
-                    A API de pagamento requer um backend para funcionar. Em produção, 
-                    crie um endpoint no seu servidor para processar os pagamentos.
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Para desenvolvimento, você pode usar um serviço de proxy CORS ou 
-                    criar um endpoint backend simples.
-                  </p>
+                  <button
+                    onClick={handleGenerateNewPix}
+                    disabled={isProcessing}
+                    className="w-full py-3 bg-primary text-primary-foreground rounded-xl font-semibold hover:opacity-90 transition-opacity flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    style={{ minHeight: '48px' }}
+                  >
+                    {isProcessing ? (
+                      <>
+                        <motion.div
+                          animate={{ rotate: 360 }}
+                          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                          className="w-5 h-5 border-2 border-white border-t-transparent rounded-full"
+                        />
+                        <span>Gerando novo PIX...</span>
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="w-5 h-5" />
+                        <span>Gerar novo PIX</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+
+              {/* Loading */}
+              {isProcessing && !pixCode && (
+                <div className="mb-6 bg-muted rounded-xl p-8 border border-border flex flex-col items-center justify-center">
+                  <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                    className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full mb-4"
+                  />
+                  <p className="text-sm text-muted-foreground">Gerando QR Code PIX...</p>
                 </div>
               )}
 
               {/* PIX Code */}
-              <div className="mb-6">
-                {isProcessing && !pixCode ? (
-                  <div className="bg-muted rounded-xl p-8 border border-border flex flex-col items-center justify-center">
-                    <motion.div
-                      animate={{ rotate: 360 }}
-                      transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                      className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full mb-4"
-                    />
-                    <p className="text-sm text-muted-foreground">Gerando QR Code PIX...</p>
+              {pixCode && !isExpired && (
+                <div className="mb-4">
+                  <p className="text-xs text-muted-foreground mb-2 text-center">Código PIX (Copiar e Cola)</p>
+                  <div className="bg-muted/50 rounded-xl p-2.5 border border-border/50 mb-4">
+                    <p className="text-[9px] font-mono break-all text-muted-foreground/70 select-all text-center leading-relaxed">
+                      {pixCode}
+                    </p>
                   </div>
-                ) : pixCode ? (
-                  <>
-                    <p className="text-sm font-medium mb-3">Código PIX (Copiar e Colar)</p>
-                    <div className="bg-muted rounded-xl p-4 border border-border relative">
-                      <p className="text-xs font-mono break-all text-foreground select-all pr-12">
-                        {pixCode}
-                      </p>
-                      <button
-                        onClick={handleCopy}
-                        className="absolute top-2 right-2 p-2 rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
-                      >
-                        {copied ? (
-                          <Check className="w-4 h-4" />
-                        ) : (
-                          <Copy className="w-4 h-4" />
-                        )}
-                      </button>
-                    </div>
-                    <button
-                      onClick={handleCopy}
-                      className="w-full mt-3 py-3 bg-primary text-primary-foreground rounded-full font-semibold hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
-                    >
-                      {copied ? (
-                        <>
-                          <Check className="w-5 h-5" />
-                          Código copiado!
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-5 h-5" />
-                          Copiar código PIX
-                        </>
-                      )}
-                    </button>
-                  </>
-                ) : (
-                  <div className="bg-destructive/10 rounded-xl p-4 border border-destructive/20">
-                    <p className="text-sm text-destructive">Erro ao gerar QR Code PIX. Tente novamente.</p>
+                  
+                  {/* Botão COPIAR logo abaixo do código */}
+                  <button
+                    onClick={handleCopy}
+                    disabled={isExpired}
+                    className="w-full py-4 bg-primary text-primary-foreground rounded-xl font-bold text-lg hover:opacity-90 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg active:scale-95 mb-4"
+                    style={{ minHeight: '56px' }}
+                  >
+                    {copied ? (
+                      <>
+                        <Check className="w-6 h-6" />
+                        <span>✔ PIX COPIADO</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-6 h-6" />
+                        <span>COPIAR CÓDIGO PIX</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+
+              {/* Status de pagamento */}
+              {pixCode && !isExpired && (
+                <div className="mb-4 text-center">
+                  <div className="inline-flex items-center gap-2 bg-muted/50 px-4 py-2 rounded-full">
+                    <Clock className="w-4 h-4 text-orange-600 dark:text-orange-400" />
+                    <p className="text-sm font-semibold text-foreground">
+                      ⏳ Copie o PIX e pague para confirmar seu pedido
+                    </p>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
 
-              {/* Instructions */}
-              <div className="bg-muted/50 rounded-xl p-4 mb-6">
-                <p className="text-sm font-semibold mb-2">Como pagar:</p>
-                <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
-                  <li>Abra o app do seu banco</li>
-                  <li>Escolha a opção PIX</li>
-                  <li>Selecione "Pix Copia e Cola"</li>
-                  <li>Cole o código copiado</li>
-                  <li>Confirme o pagamento</li>
-                </ol>
-              </div>
+              {/* Instruções de pagamento */}
+              {pixCode && !isExpired && (
+                <div className="bg-muted/50 rounded-xl p-4 mb-6">
+                  <p className="text-sm font-semibold mb-3">Instruções de pagamento:</p>
+                  <ol className="text-sm text-muted-foreground space-y-2 list-decimal list-inside">
+                    <li>Abra o app do seu banco</li>
+                    <li>Escolha a opção PIX</li>
+                    <li>Selecione "Pix Copia e Cola"</li>
+                    <li>Cole o código copiado</li>
+                    <li>Confirme o pagamento</li>
+                  </ol>
+                </div>
+              )}
 
-              {/* Actions */}
-              <div className="flex gap-3">
-                <button
-                  onClick={onClose}
-                  className="flex-1 py-3 border-2 border-border rounded-full font-semibold hover:bg-muted transition-colors"
-                >
-                  Voltar
-                </button>
-                <button
-                  onClick={handlePaymentComplete}
-                  disabled={(isProcessing && !pixCode) || !pixCode || !umbrellaTransaction}
-                  className="flex-1 py-3 bg-gradient-to-r from-tiktok-pink to-primary text-white rounded-full font-semibold hover:opacity-90 transition-opacity flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isProcessing && !pixCode ? (
-                    <>
-                      <motion.div
-                        animate={{ rotate: 360 }}
-                        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                        className="w-4 h-4 border-2 border-white border-t-transparent rounded-full"
-                      />
-                      <span>Processando...</span>
-                    </>
-                  ) : pixCode ? (
-                    <>
-                      <motion.div
-                        animate={{ rotate: 360 }}
-                        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                        className="w-4 h-4 border-2 border-white border-t-transparent rounded-full"
-                      />
-                      <span>Aguardando pagamento</span>
-                    </>
-                  ) : (
-                    <span>Confirmar pedido</span>
-                  )}
-                </button>
-              </div>
+              {/* Erro */}
+              {!pixCode && !isProcessing && (
+                <div className="mb-6 p-4 bg-destructive/10 border border-destructive/20 rounded-xl">
+                  <p className="text-sm text-destructive text-center">
+                    Erro ao gerar QR Code PIX. Tente novamente.
+                  </p>
+                </div>
+              )}
             </div>
-          </motion.div>
-        </>
+
+            {/* Rodapé simplificado */}
+            {pixCode && !isExpired && (
+              <div className="fixed bottom-0 left-0 right-0 bg-background border-t border-border p-4 z-10">
+                <p className="text-xs text-center text-green-600 dark:text-green-400 font-medium">
+                  ✔ Após o pagamento, seu pedido será confirmado automaticamente
+                </p>
+              </div>
+            )}
+          </div>
+        </motion.div>
       )}
     </AnimatePresence>
   );

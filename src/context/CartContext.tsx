@@ -61,7 +61,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     // Não permite remover brindes manualmente
     const item = items.find(i => i.id === productId);
     if (item?.isGift) {
-      toast.info('O brinde será removido automaticamente se o valor do pedido cair abaixo de R$100');
+      toast.info('O brinde será removido automaticamente se o valor do pedido cair abaixo de R$50');
       return;
     }
     setItems((prev) => prev.filter((item) => item.id !== productId));
@@ -99,8 +99,8 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     0
   );
 
-  // Brinde: Mini Kit de Canetas (adiciona automaticamente quando total >= R$100)
-  const giftThreshold = 100;
+  // Brinde: Mini Kit de Canetas (adiciona automaticamente quando total >= R$50)
+  const giftThreshold = 50;
   const hasGift = totalPrice >= giftThreshold;
   const giftProduct: CartItem = useMemo(() => ({
     id: 'gift-mini-kit-canetas',
@@ -128,7 +128,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         });
       }, 300);
     } else if (!hasGift && hasGiftInCart) {
-      // Remover brinde se o valor cair abaixo de R$100
+      // Remover brinde se o valor cair abaixo de R$50
       setItems((prev) => prev.filter(item => item.id !== 'gift-mini-kit-canetas'));
     }
   }, [hasGift, hasGiftInCart, giftProduct]);

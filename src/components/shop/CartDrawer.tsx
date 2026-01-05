@@ -41,30 +41,26 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
   const [showCardModal, setShowCardModal] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'pix' | 'card'>('pix');
 
-  const freeShippingThreshold = 99;
+  const freeShippingThreshold = 50;
   const missingForFreeShipping = Math.max(0, freeShippingThreshold - totalPrice);
   const freeShippingProgress = Math.min(100, (totalPrice / freeShippingThreshold) * 100);
   // Verificar se tem frete grátis da página de agradecimento
   const freeShippingFromThankYou = localStorage.getItem('freeShippingFromThankYou') === 'true';
   const hasFreeShipping = totalPrice >= freeShippingThreshold || freeShippingFromThankYou;
 
-  // Aplicar cupom de R$5 apenas na primeira compra
-  // Verificar se é primeira compra antes de aplicar
-  const firstPurchaseDiscount = items.length > 0 && isFirstPurchase() ? 5 : 0;
-  
   // Outros cupons percentuais são aplicados se ativos
   const applicableCoupon = getApplicableCoupon(totalPrice);
   const otherCouponDiscount = applicableCoupon && applicableCoupon.id !== '4'
     ? (totalPrice * applicableCoupon.discountPercent) / 100
     : 0;
   
-  // Total de desconto de cupons (R$5 fixo + outros cupons)
-  const couponDiscount = firstPurchaseDiscount + otherCouponDiscount;
+  // Total de desconto de cupons (sem desconto de primeira compra)
+  const couponDiscount = otherCouponDiscount;
   const priceAfterCoupon = totalPrice - couponDiscount;
   
-  // PIX tem 10% de desconto adicional
-  const pixDiscount = selectedPaymentMethod === 'pix' ? priceAfterCoupon * 0.1 : 0;
-  const priceAfterPix = priceAfterCoupon - pixDiscount;
+  // PIX não tem desconto adicional
+  const pixDiscount = 0;
+  const priceAfterPix = priceAfterCoupon;
 
   // Calculate original total and savings
   const originalTotal = items.reduce((sum, item) => sum + (item.originalPrice || item.price) * item.quantity, 0);
@@ -80,8 +76,15 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
 
   // Calcular previsão de entrega (5-7 dias úteis) e frete
   const { deliveryInfo, shippingPrice, formattedShippingPrice } = useMemo(() => {
+    // Sempre calcular frete, mesmo sem endereço
+    // Se não tem endereço, retornar frete padrão sem info de entrega
     if (!hasAddress) {
-      return { deliveryInfo: null, shippingPrice: 0, formattedShippingPrice: '0,00' };
+      const defaultPrice = hasFreeShipping ? 0 : 9.90;
+      return { 
+        deliveryInfo: null, 
+        shippingPrice: defaultPrice, 
+        formattedShippingPrice: defaultPrice.toFixed(2).replace('.', ',') 
+      };
     }
 
     // Calcular intervalo de entrega (5-7 dias úteis a partir de hoje)
@@ -137,8 +140,8 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
       // Usar valor salvo para manter consistência (apenas se não for frete grátis)
       price = parseFloat(savedShippingPrice);
     } else {
-      // Calcular novo valor e salvar
-      price = hasAddress ? (10.80 + Math.random() * (18.90 - 10.80)) : 0;
+      // Frete fixo de R$ 9,90
+      price = hasAddress ? 9.90 : 9.90;
       if (hasAddress) {
         localStorage.setItem('currentShippingPrice', price.toString());
       }
@@ -159,7 +162,6 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
   // Debug: Log dos cálculos
   console.log('🛒 CartDrawer - Cálculo de valores:', {
     totalPrice,
-    firstPurchaseDiscount,
     otherCouponDiscount,
     couponDiscount,
     priceAfterCoupon,
@@ -471,7 +473,7 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                               <div className="flex items-center gap-1 mb-2 text-success">
                                 <Gift className="w-4 h-4" />
                                 <span className="text-xs font-medium">
-                                  🎁 Brinde grátis em compras acima de R$100
+                                  🎁 Brinde grátis em compras acima de R$50
                                 </span>
                               </div>
                             )}
@@ -610,7 +612,7 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                     )}
 
                     {/* TikTok Shop Discount */}
-                    {(firstPurchaseDiscount > 0 || otherCouponDiscount > 0) && (
+                    {otherCouponDiscount > 0 && (
                       <div className="bg-card rounded-xl border border-border p-4">
                         <div className="flex items-center justify-between">
                           <span className="text-sm font-medium">Desconto do TikTok Shop</span>
@@ -645,14 +647,6 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                           </>
                         )}
                         
-                        {/* Cupom de R$5 sempre aparece quando houver itens */}
-                        {items.length > 0 && (
-                          <div className="flex justify-between text-success">
-                            <span>Cupom de Primeira Compra</span>
-                            <span className="font-medium">- R$ 5,00</span>
-                          </div>
-                        )}
-                        
                         {/* Outros cupons percentuais */}
                         {applicableCoupon && applicableCoupon.id !== '4' && (
                           <div className="flex justify-between text-success">
@@ -669,18 +663,16 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                         )}
 
                         {/* Frete */}
-                        {hasAddress && (
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Frete</span>
-                            <span className="font-medium">
-                              {hasFreeShipping ? (
-                                <span className="text-success">Grátis</span>
-                              ) : (
-                                <>R$ {formattedShippingPrice}</>
-                              )}
-                            </span>
-                          </div>
-                        )}
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Frete</span>
+                          <span className="font-medium">
+                            {hasFreeShipping ? (
+                              <span className="text-success">Grátis</span>
+                            ) : (
+                              <>R$ {formattedShippingPrice}</>
+                            )}
+                          </span>
+                        </div>
                       </div>
 
                       <div className="mt-4 pt-4 border-t border-border">
@@ -695,6 +687,15 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                         <div className="mt-3 p-3 bg-primary/10 rounded-lg border border-primary/20">
                           <p className="text-sm font-medium text-primary flex items-center gap-1">
                             😊 Você está economizando R$ {totalSavings.toFixed(2).replace('.', ',')} nesse pedido.
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Mensagem de frete grátis + brinde */}
+                      {!hasFreeShipping && missingForFreeShipping > 0 && (
+                        <div className="mt-3 p-3 bg-success/10 rounded-lg border border-success/20">
+                          <p className="text-sm font-medium text-success flex items-center gap-1">
+                            🎁 Compre mais R$ {missingForFreeShipping.toFixed(2).replace('.', ',')} e ganhe frete grátis + brinde!
                           </p>
                         </div>
                       )}
@@ -732,7 +733,7 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                                 <div className="flex items-center gap-2">
                                   <span className="font-semibold text-sm">PIX</span>
                                   <span className="bg-success text-success-foreground text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                                    10% OFF
+                                    Recomendado
                                   </span>
                                 </div>
                                 <p className="text-xs text-muted-foreground">Aprovação imediata</p>
@@ -943,7 +944,11 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
       {/* Address Alert Dialog */}
       <AlertDialog 
         open={showAddressAlert} 
-        onOpenChange={setShowAddressAlert}
+        onOpenChange={(open) => {
+          // Não permitir fechar clicando fora ou pressionando ESC - apenas pelo botão Adicionar
+          if (!open) return;
+          setShowAddressAlert(open);
+        }}
       >
         <AlertDialogContent className="rounded-3xl p-6 max-w-sm">
           <AlertDialogHeader className="text-center space-y-3">
@@ -961,12 +966,6 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
             >
               Adicionar
             </AlertDialogAction>
-            <AlertDialogCancel 
-              onClick={handleAddressLater} 
-              className="w-full rounded-full border-2 py-3 text-base font-medium"
-            >
-              Mais tarde
-            </AlertDialogCancel>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -974,7 +973,11 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
       {/* CPF Alert Dialog */}
       <AlertDialog 
         open={showCPFAlert} 
-        onOpenChange={setShowCPFAlert}
+        onOpenChange={(open) => {
+          // Não permitir fechar clicando fora ou pressionando ESC - apenas pelo botão Adicionar CPF
+          if (!open) return;
+          setShowCPFAlert(open);
+        }}
       >
         <AlertDialogContent className="rounded-3xl p-6 max-w-sm">
           <AlertDialogHeader className="text-center space-y-3">
@@ -992,12 +995,6 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
             >
               Adicionar CPF
             </AlertDialogAction>
-            <AlertDialogCancel 
-              onClick={() => setShowCPFAlert(false)} 
-              className="w-full rounded-full border-2 py-3 text-base font-medium"
-            >
-              Cancelar
-            </AlertDialogCancel>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

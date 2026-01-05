@@ -30,7 +30,7 @@ const faqItems: FAQItem[] = [
   },
   {
     question: 'Como funciona o frete grátis?',
-    answer: 'O frete grátis é aplicado automaticamente em pedidos acima de R$ 99,00. Não é necessário código promocional.'
+    answer: 'O frete grátis é aplicado automaticamente em pedidos acima de R$ 50,00. Não é necessário código promocional.'
   },
   {
     question: 'Posso cancelar meu pedido?',

@@ -133,3 +133,4 @@ Baseado no console que você mostrou:
 **Aguarde alguns segundos** e verifique novamente o console. Os logs agora mostram exatamente o que está acontecendo!
 
 
+

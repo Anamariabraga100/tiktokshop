@@ -37,9 +37,9 @@ const initialCoupons: Coupon[] = [
   },
   {
     id: '2',
-    code: 'FRETE5',
-    description: 'R$5 OFF no frete',
-    discountPercent: 5,
+    code: 'BRINDE50',
+    description: 'Brinde em compras acima de R$50',
+    discountPercent: 0, // Brinde, não é desconto
     minOrder: 50,
     expiresAt: null,
     isActive: true,
@@ -74,6 +74,29 @@ export const CouponProvider = ({ children }: { children: ReactNode }) => {
       const savedCoupons = localStorage.getItem('coupons');
       if (savedCoupons) {
         const parsed = JSON.parse(savedCoupons);
+        // Verificar se há cupom antigo FRETE5 e substituir por BRINDE50
+        const hasOldCoupon = parsed.some((c: any) => c.code === 'FRETE5' || c.id === '2' && c.description?.includes('frete'));
+        if (hasOldCoupon) {
+          // Atualizar cupom antigo para o novo
+          const updated = parsed.map((c: any) => {
+            if (c.id === '2' || c.code === 'FRETE5') {
+              return {
+                ...initialCoupons[1], // BRINDE50
+                isActivated: c.isActivated || false,
+                expiresAt: c.expiresAt ? new Date(c.expiresAt) : null,
+              };
+            }
+            return {
+              ...c,
+              expiresAt: c.expiresAt ? new Date(c.expiresAt) : null,
+            };
+          });
+          // Converter expiresAt de string para Date
+          return updated.map((c: any) => ({
+            ...c,
+            expiresAt: c.expiresAt instanceof Date ? c.expiresAt : (c.expiresAt ? new Date(c.expiresAt) : null),
+          }));
+        }
         // Converter expiresAt de string para Date
         return parsed.map((c: any) => ({
           ...c,
@@ -118,7 +141,20 @@ export const CouponProvider = ({ children }: { children: ReactNode }) => {
   // Salvar cupons no localStorage quando mudarem
   useEffect(() => {
     try {
-      localStorage.setItem('coupons', JSON.stringify(coupons));
+      // Verificar se algum cupom precisa ser atualizado (migração de FRETE5 para BRINDE50)
+      const needsUpdate = coupons.some(c => c.code === 'FRETE5' || (c.id === '2' && c.description?.includes('frete')));
+      if (needsUpdate) {
+        const updated = coupons.map(c => {
+          if (c.id === '2' || c.code === 'FRETE5') {
+            return initialCoupons[1]; // Substituir por BRINDE50
+          }
+          return c;
+        });
+        setCoupons(updated);
+        localStorage.setItem('coupons', JSON.stringify(updated));
+      } else {
+        localStorage.setItem('coupons', JSON.stringify(coupons));
+      }
     } catch (error) {
       console.error('Failed to save coupons to localStorage', error);
     }

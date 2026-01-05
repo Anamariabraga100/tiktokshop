@@ -69,7 +69,9 @@ export const CouponsDrawer = ({ isOpen, onClose }: CouponsDrawerProps) => {
                 <div className="flex items-center gap-2 text-destructive">
                   <Clock className="w-4 h-4" />
                   <span className="text-sm font-medium">
-                    O cupom de {activeCoupon.discountPercent}% de desconto está expirando
+                    {activeCoupon.discountPercent > 0 
+                      ? `O cupom de ${activeCoupon.discountPercent}% de desconto está expirando`
+                      : 'O cupom de brinde está expirando'}
                   </span>
                 </div>
                 <div className="text-2xl font-bold text-destructive mt-1">
@@ -99,7 +101,7 @@ export const CouponsDrawer = ({ isOpen, onClose }: CouponsDrawerProps) => {
                       <div>
                         <div className="flex items-center gap-2 mb-1">
                           <span className="text-2xl font-bold text-primary">
-                            {coupon.discountPercent}% OFF
+                            {coupon.discountPercent > 0 ? `${coupon.discountPercent}% OFF` : 'Brinde'}
                           </span>
                           {coupon.isActivated && (
                             <CheckCircle2 className="w-5 h-5 text-success" />
@@ -143,7 +145,7 @@ export const CouponsDrawer = ({ isOpen, onClose }: CouponsDrawerProps) => {
                 </div>
                 <div className="p-3 bg-gradient-to-r from-tiktok-cyan/10 to-success/10 rounded-xl border border-success/20">
                   <p className="text-lg font-bold text-success">Frete Grátis</p>
-                  <p className="text-xs text-muted-foreground">Acima de R$99</p>
+                  <p className="text-xs text-muted-foreground">Acima de R$50</p>
                 </div>
               </div>
             </div>
@@ -155,7 +157,7 @@ export const CouponsDrawer = ({ isOpen, onClose }: CouponsDrawerProps) => {
               </h3>
               <div className="p-4 bg-gradient-to-r from-warning/10 to-warning/5 rounded-xl border border-warning/20">
                 <p className="font-medium">Ganhe um brinde surpresa!</p>
-                <p className="text-sm text-muted-foreground">Em compras acima de R$100</p>
+                <p className="text-sm text-muted-foreground">Em compras acima de R$50</p>
               </div>
             </div>
           </motion.div>

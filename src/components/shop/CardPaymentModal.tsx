@@ -32,12 +32,9 @@ export const CardPaymentModal = ({ isOpen, onClose }: CardPaymentModalProps) => 
   const safeTotalPrice = totalPrice || 0;
   
   // Verificar frete grátis (mesma lógica do CartDrawer)
-  const freeShippingThreshold = 99;
+  const freeShippingThreshold = 50;
   const freeShippingFromThankYou = localStorage.getItem('freeShippingFromThankYou') === 'true';
   const hasFreeShippingCalculated = safeTotalPrice >= freeShippingThreshold || freeShippingFromThankYou;
-  
-  // Aplicar cupom de R$5 apenas na primeira compra
-  const firstPurchaseDiscount = items.length > 0 && isFirstPurchase() ? 5 : 0;
   
   // Outros cupons percentuais são aplicados se ativos
   const applicableCoupon = getApplicableCoupon(safeTotalPrice);
@@ -45,8 +42,8 @@ export const CardPaymentModal = ({ isOpen, onClose }: CardPaymentModalProps) => 
     ? (safeTotalPrice * applicableCoupon.discountPercent) / 100
     : 0;
   
-  // Total de desconto de cupons (R$5 fixo + outros cupons)
-  const couponDiscount = firstPurchaseDiscount + otherCouponDiscount;
+  // Total de desconto de cupons (sem desconto de primeira compra)
+  const couponDiscount = otherCouponDiscount;
   const priceAfterCoupon = safeTotalPrice - couponDiscount;
   
   // Cartão NÃO tem desconto adicional (diferente do PIX)
@@ -54,30 +51,13 @@ export const CardPaymentModal = ({ isOpen, onClose }: CardPaymentModalProps) => 
   
   // Calcular frete (usar o mesmo valor do CartDrawer)
   const shippingPrice = useMemo(() => {
-    if (!hasAddress) {
-      return 0;
-    }
     // Se tem frete grátis, sempre usar 0
     if (hasFreeShippingCalculated) {
       return 0;
     }
-    // Usar o valor salvo do CartDrawer (garante que seja o mesmo valor mostrado)
-    const savedShippingPrice = localStorage.getItem('currentShippingPrice');
-    if (savedShippingPrice) {
-      const saved = parseFloat(savedShippingPrice);
-      // Se o valor salvo for 0 mas não deveria ter frete grátis, recalcular
-      if (saved === 0 && !hasFreeShippingCalculated) {
-        const calculated = 10.80 + Math.random() * (18.90 - 10.80);
-        localStorage.setItem('currentShippingPrice', calculated.toString());
-        return calculated;
-      }
-      return saved;
-    }
-    // Se não tiver salvo, calcular (fallback)
-    const calculated = 10.80 + Math.random() * (18.90 - 10.80);
-    localStorage.setItem('currentShippingPrice', calculated.toString());
-    return calculated;
-  }, [hasAddress, hasFreeShippingCalculated]);
+    // Frete fixo de R$ 9,90 (mesmo sem endereço)
+    return 9.90;
+  }, [hasFreeShippingCalculated]);
   
   // Valor final incluindo frete (IMPORTANTE: deve incluir frete como no CartDrawer)
   const finalPrice = priceAfterCard + shippingPrice;
@@ -85,7 +65,6 @@ export const CardPaymentModal = ({ isOpen, onClose }: CardPaymentModalProps) => 
   // Debug: Log dos cálculos
   console.log('💳 CardPaymentModal - Cálculo de valores:', {
     totalPrice: safeTotalPrice,
-    firstPurchaseDiscount,
     otherCouponDiscount,
     couponDiscount,
     priceAfterCoupon,

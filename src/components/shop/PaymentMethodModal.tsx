@@ -18,9 +18,9 @@ export const PaymentMethodModal = ({ isOpen, onClose, onSelectPayment }: Payment
   const couponDiscount = applicableCoupon ? (totalPrice * applicableCoupon.discountPercent) / 100 : 0;
   const priceAfterCoupon = totalPrice - couponDiscount;
   
-  // PIX tem 10% de desconto adicional
-  const pixDiscount = priceAfterCoupon * 0.1;
-  const pixPrice = priceAfterCoupon - pixDiscount;
+  // PIX não tem desconto adicional
+  const pixDiscount = 0;
+  const pixPrice = priceAfterCoupon;
   const cardPrice = priceAfterCoupon;
 
   return (

@@ -92,7 +92,7 @@ export const ExitCouponModal = ({ isOpen, onClose, onCouponSelected }: ExitCoupo
                         <div className="flex items-center gap-2 mb-1">
                           <Ticket className="w-5 h-5 text-primary" />
                           <span className="text-xl font-bold text-primary">
-                            {coupon.discountPercent}% OFF
+                            {coupon.discountPercent > 0 ? `${coupon.discountPercent}% OFF` : 'Brinde'}
                           </span>
                         </div>
                         <p className="text-sm font-medium mb-1">

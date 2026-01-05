@@ -145,3 +145,4 @@ O Facebook Pixel cria cookies. Verifique se existem:
    - Compartilhe os logs do console e da Vercel
 
 
+

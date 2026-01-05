@@ -25,96 +25,24 @@ export const Orders = ({ onProductClick, onGoToShop }: OrdersProps) => {
   const { customerData } = useCustomer();
   const [orders, setOrders] = useState<Order[]>([]);
 
-  // Carregar pedidos do CPF atual (do Supabase E localStorage)
+  // Carregar pedidos do CPF atual
   useEffect(() => {
-    const loadOrders = async () => {
-      if (!customerData?.cpf) {
-        setOrders([]);
-        return;
-      }
-
-      const normalizedCPF = customerData.cpf.replace(/\D/g, '');
-      const allOrders: Order[] = [];
-
-      // 1. Carregar do Supabase (fonte principal)
-      try {
-        const { getOrdersFromSupabase } = await import('@/lib/supabase');
-        const supabaseOrders = await getOrdersFromSupabase(normalizedCPF);
-        
-        // Converter pedidos do Supabase para formato Order
-        // ⚠️ IMPORTANTE: Filtrar apenas pedidos PAGOS (status = 'pago' ou 'PAID')
-        const convertedOrders = supabaseOrders
-          .filter((order: any) => {
-            const status = order.status || order.umbrella_status || '';
-            const isPaid = status === 'pago' || 
-                          status === 'PAID' || 
-                          status === 'paid' ||
-                          status === 'PAGO';
-            return isPaid;
-          })
-          .map((order: any) => ({
-            orderNumber: order.order_number,
-            items: order.items || [],
-            totalPrice: order.total_price || 0,
-            paymentMethod: order.payment_method || 'pix',
-            date: order.created_at || order.updated_at || new Date().toISOString(),
-            status: order.status || order.umbrella_status || 'em_preparacao',
-            cpf: order.customer_cpf,
-          }));
-        
-        allOrders.push(...convertedOrders);
-        console.log(`✅ Carregados ${convertedOrders.length} pedidos PAGOS do Supabase`);
-      } catch (error) {
-        console.error('Erro ao carregar pedidos do Supabase:', error);
-      }
-
-      // 2. Carregar do localStorage (fallback/compatibilidade)
-      try {
-        const ordersKey = `orders_${normalizedCPF}`;
-        const savedOrders = localStorage.getItem(ordersKey);
-        if (savedOrders) {
+    if (customerData?.cpf) {
+      const ordersKey = `orders_${customerData.cpf}`;
+      const savedOrders = localStorage.getItem(ordersKey);
+      if (savedOrders) {
+        try {
           const parsedOrders = JSON.parse(savedOrders);
-          
-          // Adicionar apenas pedidos PAGOS que não estão no Supabase (evitar duplicatas)
-          // ⚠️ IMPORTANTE: Filtrar apenas pedidos com status de pagamento confirmado
-          parsedOrders
-            .filter((localOrder: Order) => {
-              // Apenas pedidos que já foram pagos (status não é 'aguardando_pagamento' ou 'WAITING_PAYMENT')
-              const status = localOrder.status?.toLowerCase() || '';
-              const isPaid = status !== 'aguardando_pagamento' && 
-                            status !== 'waiting_payment' &&
-                            status !== 'pending';
-              return isPaid;
-            })
-            .forEach((localOrder: Order) => {
-              const existsInSupabase = allOrders.some(
-                supabaseOrder => supabaseOrder.orderNumber === localOrder.orderNumber
-              );
-              if (!existsInSupabase) {
-                allOrders.push(localOrder);
-              }
-            });
-          
-          console.log(`✅ Carregados ${parsedOrders.length} pedidos do localStorage`);
+          // Ordenar por data (mais recente primeiro)
+          const sortedOrders = parsedOrders.sort((a: Order, b: Order) => 
+            new Date(b.date).getTime() - new Date(a.date).getTime()
+          );
+          setOrders(sortedOrders);
+        } catch (error) {
+          console.error('Erro ao carregar pedidos:', error);
         }
-      } catch (error) {
-        console.error('Erro ao carregar pedidos do localStorage:', error);
       }
-
-      // 3. Ordenar por data (mais recente primeiro) e remover duplicatas
-      const uniqueOrders = Array.from(
-        new Map(allOrders.map(order => [order.orderNumber, order])).values()
-      );
-      
-      const sortedOrders = uniqueOrders.sort((a: Order, b: Order) => 
-        new Date(b.date).getTime() - new Date(a.date).getTime()
-      );
-      
-      setOrders(sortedOrders);
-      console.log(`✅ Total de ${sortedOrders.length} pedidos carregados`);
-    };
-
-    loadOrders();
+    }
   }, [customerData?.cpf]);
 
   // Selecionar alguns produtos recomendados aleatórios ou populares
@@ -333,7 +261,7 @@ export const Orders = ({ onProductClick, onGoToShop }: OrdersProps) => {
           >
             <TrendingUp className="w-4 h-4 text-primary" />
             <span className="text-xs md:text-sm font-medium text-primary">
-              🎉 Frete grátis em compras acima de R$ 99
+              🎉 Frete grátis em compras acima de R$ 50
             </span>
           </motion.div>
         </motion.div>

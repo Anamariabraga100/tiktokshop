@@ -196,3 +196,4 @@ Após seguir esses passos, seu Facebook Pixel estará configurado e rastreando t
 - [Events Manager](https://business.facebook.com/events_manager2)
 
 
+
