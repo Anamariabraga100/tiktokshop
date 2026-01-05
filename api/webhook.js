@@ -24,41 +24,60 @@ export default async function handler(req, res) {
       });
     }
 
-    // Receber dados do webhook
-    const { transactionId, status, paidAt, endToEndId, amount } = req.body;
+    const body = req.body;
 
-    console.log('📥 Webhook recebido do UmbrellaPag:', {
+    console.log('📥 Webhook recebido do UmbrellaPag:', JSON.stringify(body, null, 2));
+
+    const data = body?.data;
+
+    // Webhook sem payload útil
+    if (!data || !data.id) {
+      console.warn('⚠️ Webhook recebido sem data válida');
+      return res.status(200).json({ success: true });
+    }
+
+    const transactionId = data.id;
+    const status = data.status;
+    const paidAt = data.paidAt;
+    const endToEndId = data.endToEndId;
+    const amount = data.amount;
+
+    // metadata vem como string JSON
+    let metadata = {};
+    try {
+      metadata = JSON.parse(data.metadata || '{}');
+    } catch (err) {
+      console.warn('⚠️ Falha ao parsear metadata:', data.metadata);
+    }
+
+    const orderId = metadata.orderId;
+
+    console.log('📦 Dados normalizados do webhook:', {
       transactionId,
       status,
       paidAt,
       endToEndId,
       amount,
-      fullBody: JSON.stringify(req.body, null, 2),
-      headers: {
-        'user-agent': req.headers['user-agent'],
-        'content-type': req.headers['content-type']
-      }
+      orderId
     });
 
-    // Validar dados obrigatórios
-    if (!transactionId || !status) {
-      return res.status(400).json({
-        success: false,
-        error: 'transactionId e status são obrigatórios'
-      });
+    // Se não tiver orderId, não tem como vincular
+    if (!orderId) {
+      console.warn('⚠️ Webhook sem orderId no metadata');
+      return res.status(200).json({ success: true });
     }
 
     // Se o pagamento foi confirmado (PAID)
     if (status === 'PAID' || status === 'paid' || status === 'CONFIRMED') {
       console.log('✅ Pagamento confirmado! Atualizando pedido e disparando Purchase...');
 
-      // Buscar pedido pelo transactionId
+      // Buscar pedido pelo orderId (chave primária lógica)
       if (supabase) {
         try {
           const { data: order, error: findError } = await supabase
             .from('orders')
             .select('*')
-            .eq('umbrella_transaction_id', transactionId)
+            .eq('order_number', orderId)
             .single();
 
           if (findError && findError.code !== 'PGRST116') {
@@ -89,14 +108,14 @@ export default async function handler(req, res) {
               umbrella_status: status,
               umbrella_paid_at: paidAt || new Date().toISOString(),
               umbrella_end_to_end_id: endToEndId,
-              status: 'pago',
+              status: status === 'paid' || status === 'PAID' ? 'pago' : 'aguardando_pagamento',
               updated_at: new Date().toISOString()
             };
 
             const { data: updatedOrder, error: updateError } = await supabase
               .from('orders')
               .update(updateData)
-              .eq('umbrella_transaction_id', transactionId)
+              .eq('order_number', orderId)
               .select()
               .single();
 
@@ -166,13 +185,33 @@ export default async function handler(req, res) {
               console.error('❌ Erro ao disparar Purchase para Facebook Pixel:', pixelError);
             }
           } else {
-            console.warn('⚠️ Pedido não encontrado para transactionId:', transactionId);
+            console.warn('⚠️ Pedido não encontrado para orderId:', orderId);
           }
         } catch (dbError) {
           console.error('❌ Erro ao processar webhook:', dbError);
         }
       } else {
         console.warn('⚠️ Supabase não configurado, pulando atualização do banco');
+      }
+    } else {
+      // Atualizar pedido mesmo se não for PAID (pode ser mudança de status)
+      if (supabase) {
+        try {
+          await supabase
+            .from('orders')
+            .update({
+              umbrella_status: status,
+              umbrella_paid_at: status === 'paid' || status === 'PAID' ? (paidAt || new Date().toISOString()) : null,
+              umbrella_end_to_end_id: endToEndId,
+              status: status === 'paid' || status === 'PAID' ? 'pago' : 'aguardando_pagamento',
+              updated_at: new Date().toISOString()
+            })
+            .eq('order_number', orderId);
+
+          console.log(`💰 Pedido ${orderId} atualizado via webhook (status: ${status})`);
+        } catch (dbError) {
+          console.error('❌ Erro ao atualizar pedido:', dbError);
+        }
       }
     }
 
@@ -181,6 +220,7 @@ export default async function handler(req, res) {
       success: true,
       received: true,
       transactionId,
+      orderId,
       status
     });
 
