@@ -93,7 +93,7 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
             setIsExpired(true);
             // Limpar polling quando expirar
             if (pollingRef.current) {
-              clearInterval(pollingRef.current);
+              clearTimeout(pollingRef.current);
               pollingRef.current = null;
             }
             return 0;
@@ -142,9 +142,9 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
       const checkPaymentStatus = async () => {
         try {
           const apiUrl = import.meta.env.VITE_API_URL || '/api';
-          console.log(`🔍 Verificando status do pagamento: ${apiUrl}/check-payment-status?transactionId=${umbrellaTransaction.id}`);
+          console.log(`🔍 Verificando status do pagamento: ${apiUrl}/order-status?transactionId=${umbrellaTransaction.id}`);
           
-          const response = await fetch(`${apiUrl}/check-payment-status?transactionId=${umbrellaTransaction.id}`);
+          const response = await fetch(`${apiUrl}/order-status?transactionId=${umbrellaTransaction.id}`);
           
           if (!response.ok) {
             console.warn('⚠️ Erro ao verificar status do pagamento:', response.status);
