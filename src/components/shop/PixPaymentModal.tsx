@@ -19,7 +19,7 @@ interface PixPaymentModalProps {
 export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPaymentModalProps) => {
   const { totalPrice, items } = useCart();
   const { getApplicableCoupon, isFirstPurchase, markPurchaseCompleted } = useCoupons();
-  const { customerData } = useCustomer();
+  const { customerData, hasAddress } = useCustomer();
   const [copied, setCopied] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [pixCode, setPixCode] = useState<string>('');
@@ -59,7 +59,8 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
   // ✅ Verificar se algum produto no carrinho tem frete grátis
   const hasProductWithFreeShipping = items.some(item => item.freeShipping === true);
   const hasFreeShipping = safeTotalPrice >= freeShippingThreshold || freeShippingFromThankYou || hasProductWithFreeShipping;
-  const shippingPrice = hasFreeShipping ? 0 : 9.90;
+  // ✅ Mostrar frete apenas depois de preencher informações de entrega
+  const shippingPrice = hasAddress ? (hasFreeShipping ? 0 : 7.90) : 0;
   
   // Calcular valor final incluindo frete
   const finalPrice = priceAfterCoupon + shippingPrice;
@@ -727,7 +728,7 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
                   <span className="font-medium">📦 {orderSummary}</span>
                   <br />
                   <span className="text-muted-foreground">
-                    🚚 {hasFreeShipping ? 'Frete grátis' : `Frete: R$ ${shippingPrice.toFixed(2).replace('.', ',')}`} • Entrega para todo o Brasil
+                    🚚 {!hasAddress ? 'Preencha o endereço para calcular o frete' : hasFreeShipping ? 'Frete grátis' : `Frete: R$ ${shippingPrice.toFixed(2).replace('.', ',')}`} • Entrega para todo o Brasil
                   </span>
                 </p>
               </div>

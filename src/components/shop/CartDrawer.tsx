@@ -78,15 +78,13 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
 
   // Calcular previsão de entrega (5-7 dias úteis) e frete
   const { deliveryInfo, shippingPrice, formattedShippingPrice } = useMemo(() => {
-    // Sempre calcular frete, mesmo sem endereço
-    // Se não tem endereço, retornar frete padrão sem info de entrega
+    // ✅ Mostrar frete apenas depois de preencher informações de entrega
     if (!hasAddress) {
-      // Sem endereço, sempre mostrar 9.90 a menos que o total seja realmente >= 50
-      const defaultPrice = totalPrice >= freeShippingThreshold ? 0 : 9.90;
+      // Sem endereço, não mostrar valor do frete
       return { 
         deliveryInfo: null, 
-        shippingPrice: defaultPrice, 
-        formattedShippingPrice: defaultPrice.toFixed(2).replace('.', ',') 
+        shippingPrice: 0, // Não incluir no cálculo até preencher endereço
+        formattedShippingPrice: '—' // Mostrar traço indicando que precisa preencher
       };
     }
 
@@ -139,8 +137,8 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
       price = 0;
       localStorage.setItem('currentShippingPrice', '0');
     } else {
-      // Se total < 50 e sem produto com frete grátis, sempre usar 9.90
-      price = 9.90;
+      // Se total < 50 e sem produto com frete grátis, sempre usar 7.90
+      price = 7.90;
       if (hasAddress) {
         localStorage.setItem('currentShippingPrice', price.toString());
       }
@@ -599,7 +597,9 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                               </div>
                             </div>
                             <div className="text-right">
-                              {totalPrice >= freeShippingThreshold ? (
+                              {!hasAddress ? (
+                                <span className="text-sm font-bold text-muted-foreground">Preencha o endereço</span>
+                              ) : hasFreeShipping ? (
                                 <span className="text-sm font-bold text-success">Grátis</span>
                               ) : (
                                 <span className="text-sm font-bold">R$ {formattedShippingPrice}</span>
@@ -665,7 +665,9 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Frete</span>
                           <span className="font-medium">
-                            {totalPrice >= freeShippingThreshold ? (
+                            {!hasAddress ? (
+                              <span className="text-muted-foreground text-sm">Preencha o endereço</span>
+                            ) : hasFreeShipping ? (
                               <span className="text-success">Grátis</span>
                             ) : (
                               <>R$ {formattedShippingPrice}</>

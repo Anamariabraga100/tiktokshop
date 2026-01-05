@@ -53,13 +53,17 @@ export const CardPaymentModal = ({ isOpen, onClose }: CardPaymentModalProps) => 
   
   // Calcular frete (usar o mesmo valor do CartDrawer)
   const shippingPrice = useMemo(() => {
+    // ✅ Mostrar frete apenas depois de preencher informações de entrega
+    if (!hasAddress) {
+      return 0; // Não incluir no cálculo até preencher endereço
+    }
     // Se tem frete grátis, sempre usar 0
     if (hasFreeShippingCalculated) {
       return 0;
     }
-    // Frete fixo de R$ 9,90 (mesmo sem endereço)
-    return 9.90;
-  }, [hasFreeShippingCalculated]);
+    // Frete fixo de R$ 7,90
+    return 7.90;
+  }, [hasFreeShippingCalculated, hasAddress]);
   
   // Valor final incluindo frete (IMPORTANTE: deve incluir frete como no CartDrawer)
   const finalPrice = priceAfterCard + shippingPrice;
