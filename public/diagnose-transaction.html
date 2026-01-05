@@ -188,8 +188,21 @@
             >
         </div>
         
+        <div class="form-group">
+            <label for="pixCode">OU Código PIX (para buscar pedido):</label>
+            <input 
+                type="text" 
+                id="pixCode" 
+                placeholder="Cole o código PIX aqui"
+            >
+        </div>
+        
         <button id="diagnoseBtn" onclick="diagnoseTransaction()">
             🔍 Diagnosticar Transação
+        </button>
+        
+        <button id="findPixBtn" onclick="findByPixCode()" style="margin-top: 10px; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+            🔎 Buscar por Código PIX
         </button>
         
         <div class="loading" id="loading">
@@ -321,6 +334,124 @@
                 html += '<p class="status info">ℹ️ Webhook deveria ser disparado. Tentativa automática realizada.</p>';
             }
             html += '</div>';
+            
+            // Dados completos (JSON)
+            html += '<div class="section">';
+            html += '<h3>📄 Dados Completos (JSON)</h3>';
+            html += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+            html += '</div>';
+            
+            return html;
+        }
+        
+        async function findByPixCode() {
+            const pixCode = document.getElementById('pixCode').value.trim();
+            const resultDiv = document.getElementById('result');
+            const loadingDiv = document.getElementById('loading');
+            const findPixBtn = document.getElementById('findPixBtn');
+            
+            if (!pixCode) {
+                alert('Por favor, cole o código PIX');
+                return;
+            }
+            
+            // Mostrar loading
+            loadingDiv.classList.add('show');
+            resultDiv.classList.remove('show');
+            findPixBtn.disabled = true;
+            
+            try {
+                const apiUrl = window.location.origin;
+                const response = await fetch(`${apiUrl}/api/find-transaction-by-pix?pixCode=${encodeURIComponent(pixCode)}`);
+                const data = await response.json();
+                
+                // Esconder loading
+                loadingDiv.classList.remove('show');
+                findPixBtn.disabled = false;
+                
+                // Mostrar resultado
+                resultDiv.innerHTML = formatPixResult(data);
+                resultDiv.classList.add('show');
+                
+            } catch (error) {
+                loadingDiv.classList.remove('show');
+                findPixBtn.disabled = false;
+                
+                resultDiv.innerHTML = `
+                    <div class="status error">
+                        ❌ Erro ao buscar por código PIX: ${error.message}
+                    </div>
+                `;
+                resultDiv.classList.add('show');
+            }
+        }
+        
+        function formatPixResult(data) {
+            if (!data.success) {
+                return `
+                    <div class="status error">
+                        ❌ Erro: ${data.error || 'Erro desconhecido'}
+                    </div>
+                `;
+            }
+            
+            let html = '';
+            
+            // Análise do código PIX
+            html += '<div class="section">';
+            html += '<h3>🔍 Análise do Código PIX</h3>';
+            html += `<p><strong>Provedor:</strong> ${data.analysis.provider}</p>`;
+            if (data.analysis.isBluPay) {
+                html += '<p class="status warning">⚠️ Este código PIX é do BluPay, não do UmbrellaPag!</p>';
+                html += '<p>Isso significa que você pagou um PIX antigo ou de outro sistema.</p>';
+            } else if (data.analysis.isUmbrellaPag) {
+                html += '<p class="status success">✅ Este código PIX é do UmbrellaPag</p>';
+            }
+            if (data.analysis.pixInfo) {
+                html += `<p><strong>Formato:</strong> ${data.analysis.pixInfo.format}</p>`;
+                if (data.analysis.pixInfo.amount) {
+                    html += `<p><strong>Valor:</strong> R$ ${data.analysis.pixInfo.amount.value.toFixed(2)}</p>`;
+                }
+            }
+            html += '</div>';
+            
+            // Resultado da busca
+            if (data.found && data.orders.length > 0) {
+                html += '<div class="status success">✅ Encontrado ' + data.orders.length + ' pedido(s)</div>';
+                
+                data.orders.forEach((order, index) => {
+                    html += '<div class="section">';
+                    html += `<h3>📦 Pedido ${index + 1}: ${order.order_number}</h3>`;
+                    html += `<p><strong>Valor Total:</strong> R$ ${order.total_price?.toFixed(2) || 'N/A'}</p>`;
+                    html += `<p><strong>Status:</strong> ${order.status || 'N/A'}</p>`;
+                    html += `<p><strong>Status UmbrellaPag:</strong> ${order.umbrella_status || 'N/A'}</p>`;
+                    html += `<p><strong>Transaction ID:</strong> ${order.umbrella_transaction_id || 'N/A'}</p>`;
+                    if (order.created_at) {
+                        html += `<p><strong>Criado em:</strong> ${new Date(order.created_at).toLocaleString('pt-BR')}</p>`;
+                    }
+                    if (order.umbrella_paid_at) {
+                        html += `<p><strong>Pago em:</strong> ${new Date(order.umbrella_paid_at).toLocaleString('pt-BR')}</p>`;
+                    }
+                    html += '</div>';
+                });
+            } else {
+                html += '<div class="status warning">⚠️ Nenhum pedido encontrado com este código PIX</div>';
+                html += '<div class="section">';
+                html += '<h3>💡 O que isso significa?</h3>';
+                if (data.analysis.isBluPay) {
+                    html += '<p>Este código PIX é do BluPay (sistema antigo). O pagamento foi feito, mas não está vinculado a nenhum pedido no sistema atual (UmbrellaPag).</p>';
+                    html += '<p><strong>Solução:</strong> Você precisa gerar um novo PIX pelo sistema atual para que o pagamento seja rastreado corretamente.</p>';
+                } else {
+                    html += '<p>Este código PIX não está relacionado a nenhum pedido no banco de dados.</p>';
+                    html += '<p>Possíveis causas:</p>';
+                    html += '<ul style="margin-left: 20px; margin-top: 10px;">';
+                    html += '<li>O código PIX foi gerado em outro sistema</li>';
+                    html += '<li>O pedido não foi salvo no banco de dados</li>';
+                    html += '<li>O código PIX foi alterado ou truncado</li>';
+                    html += '</ul>';
+                }
+                html += '</div>';
+            }
             
             // Dados completos (JSON)
             html += '<div class="section">';
