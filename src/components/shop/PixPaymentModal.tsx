@@ -533,13 +533,17 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
                   <button
                     onClick={handleCopy}
                     disabled={isExpired}
-                    className="w-full py-4 bg-primary text-primary-foreground rounded-xl font-bold text-lg hover:opacity-90 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg active:scale-95 mb-4"
+                    className={`w-full py-4 rounded-xl font-bold text-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg active:scale-95 mb-4 ${
+                      copied 
+                        ? 'bg-green-600 text-white hover:bg-green-700' 
+                        : 'bg-primary text-primary-foreground hover:opacity-90'
+                    }`}
                     style={{ minHeight: '56px' }}
                   >
                     {copied ? (
                       <>
                         <Check className="w-6 h-6" />
-                        <span>✔ PIX COPIADO</span>
+                        <span>PIX COPIADO</span>
                       </>
                     ) : (
                       <>
