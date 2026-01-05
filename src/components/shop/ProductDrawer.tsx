@@ -38,13 +38,13 @@ export const ProductDrawer = memo(({ product, isOpen, onClose, onBuyNow, onProdu
     
     // Primeiro, buscar produtos da mesma categoria
     const sameCategory = products
-      .filter(p => !p.isHidden && p.id !== product.id && p.category === product.category) // ✅ Filtrar produtos ocultos
+      .filter(p => p.id !== product.id && p.category === product.category)
       .slice(0, targetCount);
     
     // Se não tiver 8 itens, buscar de outras categorias
     if (sameCategory.length < targetCount) {
       const otherCategories = products
-        .filter(p => !p.isHidden && p.id !== product.id && p.category !== product.category) // ✅ Filtrar produtos ocultos
+        .filter(p => p.id !== product.id && p.category !== product.category)
         .slice(0, targetCount - sameCategory.length);
       
       return [...sameCategory, ...otherCategories].slice(0, targetCount);
@@ -717,7 +717,7 @@ export const ProductDrawer = memo(({ product, isOpen, onClose, onBuyNow, onProdu
               {/* Store Information */}
               {product.brand && (() => {
                 // Calcular estatísticas da loja
-                const storeProducts = products.filter(p => !p.isHidden && p.brand === product.brand); // ✅ Filtrar produtos ocultos
+                const storeProducts = products.filter(p => p.brand === product.brand);
                 const totalSold = storeProducts.reduce((sum, p) => sum + (p.soldCount || 0), 0);
                 const avgRating = storeProducts.length > 0
                   ? storeProducts.reduce((sum, p) => sum + p.rating, 0) / storeProducts.length

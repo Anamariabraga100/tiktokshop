@@ -31,7 +31,6 @@ import escovaDentes from '@/assets/products/Escova de Dentes Elétrica Sônica.j
 import parafusadeira48V from '@/assets/products/ParafusadeiraFuradeira 48V Bateria.jpg';
 import product25 from '@/assets/products/product-25.jpg';
 import product26 from '@/assets/products/product-26.jpg';
-import productTest from '@/assets/products/product-1.jpg';
 import parafusadeiraDomestica from '@/assets/products/Kit Parafusadeira Doméstica com maleta Leve Portátil USB Recarregável lemon tree.jpg';
 import videoParafusadeira1 from '@/assets/video-product/Kit Parafusadeira Doméstica com maleta Leve Portátil USB Recarregável 1.mp4';
 import videoParafusadeira2 from '@/assets/video-product/Kit Parafusadeira Doméstica com maleta Leve Portátil USB Recarregável 2.mp4';
@@ -1751,44 +1750,6 @@ Barba, bigode, pelos corporais, cabelo, pelos nasais
         itemVariant: 'Kit Completo',
         text: 'Kit perfeito! Uso todo dia e tô muito satisfeito. As lâminas são boas, bateria dura bastante e o design é legal. Super recomendo! Melhor custo-benefício que já vi. Já mostrei pros meus amigos e vários já compraram também. A qualidade é muito boa pelo preço. Vale cada centavo!',
         date: '2024-02-08',
-      },
-    ] as ProductReview[],
-  },
-  
-  // 🧪 PRODUTO DE TESTE - R$ 3,99 com frete grátis
-  {
-    id: 'TEST-001',
-    name: '🧪 Produto Teste - Frete Grátis',
-    price: 3.99,
-    originalPrice: 9.90,
-    image: productTest,
-    rating: 5.0,
-    soldCount: 0,
-    viewCount: 0,
-    likesCount: 0,
-    isHotDeal: true,
-    isNewCustomerDeal: true,
-    freeShipping: true, // ✅ Frete grátis sempre, independente do valor
-    isHidden: true, // ✅ Oculto das listagens públicas (só acessível por link direto)
-    category: 'Acessórios',
-    brand: 'Teste',
-    description: `Produto de teste para validar o fluxo completo de pagamento PIX.
-
-**Características:**
-• Preço: R$ 3,99
-• Frete: Grátis (sempre)
-• Ideal para: Testar pagamento PIX completo
-
-**Uso:**
-Este produto foi criado especificamente para testes de pagamento. Use para validar todo o fluxo desde a compra até a confirmação do pagamento.`,
-    reviews: [
-      {
-        id: 'r-test-1',
-        userName: 'Sistema',
-        userInitials: 'SYS',
-        rating: 5,
-        text: 'Produto criado para testes de pagamento PIX.',
-        date: '2024-01-01',
       },
     ] as ProductReview[],
   },

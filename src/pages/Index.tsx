@@ -129,8 +129,7 @@ const Index = () => {
   }, [isExitCouponModalOpen]);
 
   const filteredProducts = useMemo(() => {
-    // ✅ Filtrar produtos ocultos das listagens públicas
-    let result = products.filter((p) => !p.isHidden);
+    let result = products;
 
     // Filter by header tab
     if (headerTab === 'AO VIVO') {
@@ -207,17 +206,14 @@ const Index = () => {
     return sorted;
   }, [selectedCategory, searchQuery, activeTab, sortOption, headerTab]);
 
-  // ✅ Filtrar produtos ocultos das listagens públicas
-  const visibleProducts = products.filter((p) => !p.isHidden);
-  
   // Produtos mais baratos do site (ordenados por preço)
-  const cheapestProducts = [...visibleProducts]
+  const cheapestProducts = [...products]
     .sort((a, b) => a.price - b.price)
     .slice(0, 8);
   
-  const hotDeals = visibleProducts.filter((p) => p.isHotDeal);
-  const newCustomerDeals = visibleProducts.filter((p) => p.isNewCustomerDeal);
-  const mostSold = [...visibleProducts].sort((a, b) => b.soldCount - a.soldCount).slice(0, 4);
+  const hotDeals = products.filter((p) => p.isHotDeal);
+  const newCustomerDeals = products.filter((p) => p.isNewCustomerDeal);
+  const mostSold = [...products].sort((a, b) => b.soldCount - a.soldCount).slice(0, 4);
 
   const handleProductClick = (product: Product) => {
     // Se o produto tiver URL, abrir em nova aba para tráfego pago
