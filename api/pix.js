@@ -175,21 +175,54 @@ async function createTransaction(req, res) {
           umbrella_external_ref: orderId,
           // Campo de expiração para lógica clara
           expires_at: expiresAt,
-          // ✅ Salvar fbc/fbp para usar no webhook (atribuição de campanha)
-          facebook_fbc: fbc || null,
-          facebook_fbp: fbp || null,
         };
 
-        const { data: savedOrder, error: saveError } = await supabase
+        // ✅ Tentar salvar com fbc/fbp primeiro (se disponível)
+        // Se as colunas não existirem, tentar novamente sem elas
+        let savedOrder = null;
+        let saveError = null;
+        
+        // Adicionar fbc/fbp se disponível
+        if (fbc || fbp) {
+          if (fbc) orderData.facebook_fbc = fbc;
+          if (fbp) orderData.facebook_fbp = fbp;
+        }
+
+        // Tentar salvar
+        const { data, error } = await supabase
           .from('orders')
           .insert(orderData)
           .select()
           .single();
+        
+        savedOrder = data;
+        saveError = error;
+
+        // Se falhar e tiver tentado com fbc/fbp, tentar sem
+        if (saveError && (fbc || fbp)) {
+          const errorMessage = saveError.message || '';
+          if (errorMessage.includes('facebook_fbc') || errorMessage.includes('facebook_fbp')) {
+            console.warn('⚠️ Colunas facebook_fbc/fbp não existem no banco. Tentando salvar sem elas...');
+            const orderDataWithoutFb = { ...orderData };
+            delete orderDataWithoutFb.facebook_fbc;
+            delete orderDataWithoutFb.facebook_fbp;
+            
+            const { data: dataRetry, error: errorRetry } = await supabase
+              .from('orders')
+              .insert(orderDataWithoutFb)
+              .select()
+              .single();
+            
+            savedOrder = dataRetry;
+            saveError = errorRetry;
+          }
+        }
 
         if (saveError) {
           console.error('❌ Erro ao salvar pedido no banco:', saveError);
+          // Não falhar a criação do PIX por causa do banco
         } else {
-          console.log('✅ Pedido salvo no banco:', savedOrder.order_number);
+          console.log('✅ Pedido salvo no banco:', savedOrder?.order_number);
         }
       } catch (dbError) {
         console.error('❌ Erro ao salvar pedido no banco:', dbError);
@@ -335,7 +368,7 @@ async function checkStatus(req, res) {
             quantity: item.quantity || 1,
             item_price: item.price
           })) || [],
-          // ✅ Adicionar fbc/fbp do banco (salvos na criação do pedido)
+          // ✅ Adicionar fbc/fbp do banco (salvos na criação do pedido, se disponível)
           fbc: order.facebook_fbc || null,
           fbp: order.facebook_fbp || null,
           userData: {

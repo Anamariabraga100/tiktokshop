@@ -157,7 +157,7 @@ export default async function handler(req, res) {
                   quantity: item.quantity || 1,
                   item_price: item.price
                 })) || [],
-                // ✅ Adicionar fbc/fbp do banco (salvos na criação do pedido)
+                // ✅ Adicionar fbc/fbp do banco (salvos na criação do pedido, se disponível)
                 fbc: order.facebook_fbc || null,
                 fbp: order.facebook_fbp || null,
                 userData: {
