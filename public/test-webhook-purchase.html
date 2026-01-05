@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste Webhook + Purchase Facebook</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 12px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .section h2 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 20px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+            font-weight: 500;
+            font-size: 14px;
+        }
+        
+        input, textarea, select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        
+        input:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        textarea {
+            min-height: 100px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 14px 28px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            width: 100%;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        
+        .result.success {
+            background: #d4edda;
+            border: 2px solid #28a745;
+            color: #155724;
+        }
+        
+        .result.error {
+            background: #f8d7da;
+            border: 2px solid #dc3545;
+            color: #721c24;
+        }
+        
+        .result.info {
+            background: #d1ecf1;
+            border: 2px solid #17a2b8;
+            color: #0c5460;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+        
+        .status-badge.success {
+            background: #28a745;
+            color: white;
+        }
+        
+        .status-badge.error {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .status-badge.pending {
+            background: #ffc107;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Teste Webhook + Purchase Facebook</h1>
+        <p class="subtitle">Teste o fluxo completo de confirmação de pagamento PIX e envio do Purchase para Facebook</p>
+        
+        <!-- Teste 1: Simular Webhook do UmbrellaPag -->
+        <div class="section">
+            <h2>1️⃣ Simular Webhook do UmbrellaPag</h2>
+            <p style="color: #666; margin-bottom: 15px; font-size: 14px;">
+                Simula a notificação do UmbrellaPag quando o PIX é pago
+            </p>
+            
+            <div class="form-group">
+                <label>Transaction ID (ID da transação UmbrellaPag):</label>
+                <input type="text" id="transactionId" placeholder="Ex: abc123-def456-ghi789" value="">
+            </div>
+            
+            <div class="form-group">
+                <label>Order Number (Número do pedido no banco):</label>
+                <input type="text" id="orderNumber" placeholder="Ex: ORDER123" value="">
+            </div>
+            
+            <div class="grid">
+                <div class="form-group">
+                    <label>Status:</label>
+                    <select id="status">
+                        <option value="PAID">PAID (Pago)</option>
+                        <option value="paid">paid (Pago)</option>
+                        <option value="CONFIRMED">CONFIRMED (Confirmado)</option>
+                        <option value="WAITING_PAYMENT">WAITING_PAYMENT (Aguardando)</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>Valor (R$):</label>
+                    <input type="number" id="amount" step="0.01" placeholder="19.80" value="19.80">
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label>End-to-End ID (opcional):</label>
+                <input type="text" id="endToEndId" placeholder="E12345678202501201030123456789012" value="">
+            </div>
+            
+            <button onclick="testWebhook()">📤 Enviar Webhook</button>
+            <div id="webhookResult"></div>
+        </div>
+        
+        <!-- Teste 2: Testar Purchase direto -->
+        <div class="section">
+            <h2>2️⃣ Testar Purchase Direto</h2>
+            <p style="color: #666; margin-bottom: 15px; font-size: 14px;">
+                Testa o envio do Purchase diretamente para o Facebook Pixel
+            </p>
+            
+            <div class="form-group">
+                <label>Order ID:</label>
+                <input type="text" id="purchaseOrderId" placeholder="ORDER123" value="">
+            </div>
+            
+            <div class="grid">
+                <div class="form-group">
+                    <label>Valor (R$):</label>
+                    <input type="number" id="purchaseValue" step="0.01" placeholder="19.80" value="19.80">
+                </div>
+                
+                <div class="form-group">
+                    <label>Quantidade de itens:</label>
+                    <input type="number" id="purchaseNumItems" placeholder="1" value="1">
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label>Email do cliente:</label>
+                <input type="email" id="purchaseEmail" placeholder="cliente@exemplo.com" value="">
+            </div>
+            
+            <div class="form-group">
+                <label>Telefone do cliente:</label>
+                <input type="text" id="purchasePhone" placeholder="11999999999" value="">
+            </div>
+            
+            <button onclick="testPurchase()">📤 Enviar Purchase</button>
+            <div id="purchaseResult"></div>
+        </div>
+        
+        <!-- Teste 3: Verificar Pedidos no Banco -->
+        <div class="section">
+            <h2>3️⃣ Verificar Pedidos no Banco</h2>
+            <p style="color: #666; margin-bottom: 15px; font-size: 14px;">
+                Busca pedidos por transaction ID ou order number
+            </p>
+            
+            <div class="form-group">
+                <label>Transaction ID ou Order Number:</label>
+                <input type="text" id="searchOrder" placeholder="Transaction ID ou Order Number" value="">
+            </div>
+            
+            <button onclick="searchOrder()">🔍 Buscar Pedido</button>
+            <div id="searchResult"></div>
+        </div>
+    </div>
+    
+    <script>
+        const API_URL = window.location.origin;
+        
+        function showResult(elementId, message, type = 'info') {
+            const element = document.getElementById(elementId);
+            element.innerHTML = `<div class="result ${type}">${message}</div>`;
+        }
+        
+        async function testWebhook() {
+            const transactionId = document.getElementById('transactionId').value;
+            const orderNumber = document.getElementById('orderNumber').value;
+            const status = document.getElementById('status').value;
+            const amount = parseFloat(document.getElementById('amount').value);
+            const endToEndId = document.getElementById('endToEndId').value;
+            
+            if (!transactionId) {
+                showResult('webhookResult', '❌ Por favor, preencha o Transaction ID', 'error');
+                return;
+            }
+            
+            showResult('webhookResult', '⏳ Enviando webhook...', 'info');
+            
+            try {
+                const payload = {
+                    transactionId,
+                    status,
+                    amount: amount ? Math.round(amount * 100) : undefined, // em centavos
+                    paidAt: new Date().toISOString(),
+                    endToEndId: endToEndId || undefined
+                };
+                
+                console.log('📤 Enviando webhook:', payload);
+                
+                const response = await fetch(`${API_URL}/api/webhook-umbrellapag`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok && result.success) {
+                    showResult('webhookResult', 
+                        `✅ Webhook recebido com sucesso!\n\n` +
+                        `Transaction ID: ${transactionId}\n` +
+                        `Status: ${status}\n` +
+                        `Resultado: ${JSON.stringify(result, null, 2)}`, 
+                        'success'
+                    );
+                } else {
+                    showResult('webhookResult', 
+                        `❌ Erro ao processar webhook:\n\n${JSON.stringify(result, null, 2)}`, 
+                        'error'
+                    );
+                }
+            } catch (error) {
+                showResult('webhookResult', 
+                    `❌ Erro ao enviar webhook:\n\n${error.message}`, 
+                    'error'
+                );
+            }
+        }
+        
+        async function testPurchase() {
+            const orderId = document.getElementById('purchaseOrderId').value || `TEST-${Date.now()}`;
+            const value = parseFloat(document.getElementById('purchaseValue').value) || 19.80;
+            const numItems = parseInt(document.getElementById('purchaseNumItems').value) || 1;
+            const email = document.getElementById('purchaseEmail').value;
+            const phone = document.getElementById('purchasePhone').value;
+            
+            showResult('purchaseResult', '⏳ Enviando Purchase...', 'info');
+            
+            try {
+                const payload = {
+                    eventType: 'Purchase',
+                    eventName: 'Purchase',
+                    orderId,
+                    value,
+                    currency: 'BRL',
+                    numItems,
+                    contents: [
+                        {
+                            id: 'test-product-1',
+                            quantity: numItems,
+                            item_price: value / numItems
+                        }
+                    ],
+                    userData: {
+                        email: email || undefined,
+                        phone: phone || undefined,
+                        firstName: 'Teste',
+                        lastName: 'Usuario',
+                        externalId: '12345678900'
+                    }
+                };
+                
+                console.log('📤 Enviando Purchase:', payload);
+                
+                const response = await fetch(`${API_URL}/api/facebook-pixel`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok && result.success) {
+                    showResult('purchaseResult', 
+                        `✅ Purchase enviado com sucesso!\n\n` +
+                        `Order ID: ${orderId}\n` +
+                        `Valor: R$ ${value.toFixed(2)}\n` +
+                        `Event ID: ${result.eventId || 'N/A'}\n\n` +
+                        `Resultado completo:\n${JSON.stringify(result, null, 2)}`, 
+                        'success'
+                    );
+                } else {
+                    showResult('purchaseResult', 
+                        `❌ Erro ao enviar Purchase:\n\n${JSON.stringify(result, null, 2)}`, 
+                        'error'
+                    );
+                }
+            } catch (error) {
+                showResult('purchaseResult', 
+                    `❌ Erro ao enviar Purchase:\n\n${error.message}`, 
+                    'error'
+                );
+            }
+        }
+        
+        async function searchOrder() {
+            const searchTerm = document.getElementById('searchOrder').value;
+            
+            if (!searchTerm) {
+                showResult('searchResult', '❌ Por favor, preencha o Transaction ID ou Order Number', 'error');
+                return;
+            }
+            
+            showResult('searchResult', '⏳ Buscando pedido...', 'info');
+            
+            // Nota: Esta função requer um endpoint de busca no backend
+            // Por enquanto, apenas mostra uma mensagem informativa
+            showResult('searchResult', 
+                `ℹ️ Busca de pedidos requer endpoint no backend.\n\n` +
+                `Para testar, use o Transaction ID ou Order Number no teste de webhook acima.`, 
+                'info'
+            );
+        }
+        
+        // Preencher campos com valores de exemplo ao carregar
+        window.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('transactionId').value = `test-${Date.now()}`;
+            document.getElementById('orderNumber').value = `ORDER-${Date.now().toString(36).toUpperCase()}`;
+            document.getElementById('purchaseOrderId').value = `TEST-${Date.now()}`;
+        });
+    </script>
+</body>
+</html>
+
