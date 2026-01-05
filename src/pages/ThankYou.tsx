@@ -186,6 +186,7 @@ const ThankYou = () => {
     // Primeiro, tentar pegar produtos da mesma categoria
     if (purchasedCategories.length > 0) {
       related = products.filter(product => {
+        if (product.isHidden) return false; // ✅ Filtrar produtos ocultos
         if (purchasedIds.has(product.id)) return false;
         return purchasedCategories.includes(product.category);
       });
@@ -195,6 +196,7 @@ const ThankYou = () => {
     if (related.length < 8) {
       const allProducts = products
         .filter(product => {
+          if (product.isHidden) return false; // ✅ Filtrar produtos ocultos
           if (purchasedIds.has(product.id)) return false;
           // Se já tem produtos relacionados, não adicionar duplicados
           if (related.length > 0 && related.some(p => p.id === product.id)) return false;
@@ -226,7 +228,7 @@ const ThankYou = () => {
     // Primeiro, pegar produtos com mais vídeos (priorizar Kit Barbeador que tem 6 vídeos)
     // Ordenar por: quantidade de vídeos (desc), depois por soldCount (desc)
     const productsWithVideos = products
-      .filter(p => !purchasedIds.has(p.id) && p.creatorVideos && p.creatorVideos.length > 0)
+      .filter(p => !p.isHidden && !purchasedIds.has(p.id) && p.creatorVideos && p.creatorVideos.length > 0) // ✅ Filtrar produtos ocultos
       .sort((a, b) => {
         // Priorizar produtos com mais vídeos
         const aVideoCount = a.creatorVideos?.length || 0;

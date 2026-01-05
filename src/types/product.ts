@@ -41,6 +41,7 @@ export interface Product {
   reviews?: ProductReview[];
   creatorVideos?: CreatorVideo[];
   url?: string; // URL para tráfego pago
+  isHidden?: boolean; // Produto oculto (só acessível por link direto)
 }
 
 export interface CartItem extends Product {

@@ -46,7 +46,9 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
   const freeShippingProgress = Math.min(100, (totalPrice / freeShippingThreshold) * 100);
   // Verificar se tem frete grátis da página de agradecimento (apenas se total >= 50)
   const freeShippingFromThankYou = localStorage.getItem('freeShippingFromThankYou') === 'true' && totalPrice >= freeShippingThreshold;
-  const hasFreeShipping = totalPrice >= freeShippingThreshold || freeShippingFromThankYou;
+  // ✅ Verificar se algum produto no carrinho tem frete grátis
+  const hasProductWithFreeShipping = items.some(item => item.freeShipping === true);
+  const hasFreeShipping = totalPrice >= freeShippingThreshold || freeShippingFromThankYou || hasProductWithFreeShipping;
 
   // Outros cupons percentuais são aplicados se ativos
   const applicableCoupon = getApplicableCoupon(totalPrice);
@@ -132,12 +134,12 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
     // Calcular frete baseado no total atual
     let price: number;
     
-    // Se tem frete grátis (total >= 50), sempre usar 0
-    if (totalPrice >= freeShippingThreshold) {
+    // ✅ Se tem frete grátis (total >= 50 OU produto com freeShipping), sempre usar 0
+    if (hasFreeShipping) {
       price = 0;
       localStorage.setItem('currentShippingPrice', '0');
     } else {
-      // Se total < 50, sempre usar 9.90 (não usar valor salvo '0')
+      // Se total < 50 e sem produto com frete grátis, sempre usar 9.90
       price = 9.90;
       if (hasAddress) {
         localStorage.setItem('currentShippingPrice', price.toString());
@@ -151,7 +153,7 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
       shippingPrice: price,
       formattedShippingPrice: formatted
     };
-  }, [hasAddress, totalPrice, freeShippingThreshold]);
+  }, [hasAddress, totalPrice, freeShippingThreshold, hasFreeShipping]);
 
   // Calcular preço final incluindo frete
   const finalPrice = priceAfterPix + shippingPrice;

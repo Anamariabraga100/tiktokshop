@@ -53,10 +53,12 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
   // PIX não tem desconto adicional
   const pixDiscount = 0;
 
-  // Calcular frete grátis (threshold R$ 50)
+  // Calcular frete grátis (threshold R$ 50 OU produto com freeShipping)
   const freeShippingThreshold = 50;
   const freeShippingFromThankYou = localStorage.getItem('freeShippingFromThankYou') === 'true' && safeTotalPrice >= freeShippingThreshold;
-  const hasFreeShipping = safeTotalPrice >= freeShippingThreshold || freeShippingFromThankYou;
+  // ✅ Verificar se algum produto no carrinho tem frete grátis
+  const hasProductWithFreeShipping = items.some(item => item.freeShipping === true);
+  const hasFreeShipping = safeTotalPrice >= freeShippingThreshold || freeShippingFromThankYou || hasProductWithFreeShipping;
   const shippingPrice = hasFreeShipping ? 0 : 9.90;
   
   // Calcular valor final incluindo frete

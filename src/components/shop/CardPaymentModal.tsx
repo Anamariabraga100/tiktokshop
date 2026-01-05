@@ -33,8 +33,10 @@ export const CardPaymentModal = ({ isOpen, onClose }: CardPaymentModalProps) => 
   
   // Verificar frete grátis (mesma lógica do CartDrawer)
   const freeShippingThreshold = 50;
-  const freeShippingFromThankYou = localStorage.getItem('freeShippingFromThankYou') === 'true';
-  const hasFreeShippingCalculated = safeTotalPrice >= freeShippingThreshold || freeShippingFromThankYou;
+  const freeShippingFromThankYou = localStorage.getItem('freeShippingFromThankYou') === 'true' && safeTotalPrice >= freeShippingThreshold;
+  // ✅ Verificar se algum produto no carrinho tem frete grátis
+  const hasProductWithFreeShipping = items.some(item => item.freeShipping === true);
+  const hasFreeShippingCalculated = safeTotalPrice >= freeShippingThreshold || freeShippingFromThankYou || hasProductWithFreeShipping;
   
   // Outros cupons percentuais são aplicados se ativos
   const applicableCoupon = getApplicableCoupon(safeTotalPrice);
