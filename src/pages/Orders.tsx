@@ -42,18 +42,28 @@ export const Orders = ({ onProductClick, onGoToShop }: OrdersProps) => {
         const supabaseOrders = await getOrdersFromSupabase(normalizedCPF);
         
         // Converter pedidos do Supabase para formato Order
-        const convertedOrders = supabaseOrders.map((order: any) => ({
-          orderNumber: order.order_number,
-          items: order.items || [],
-          totalPrice: order.total_price || 0,
-          paymentMethod: order.payment_method || 'pix',
-          date: order.created_at || order.updated_at || new Date().toISOString(),
-          status: order.status || order.umbrella_status || 'aguardando_pagamento',
-          cpf: order.customer_cpf,
-        }));
+        // ⚠️ IMPORTANTE: Filtrar apenas pedidos PAGOS (status = 'pago' ou 'PAID')
+        const convertedOrders = supabaseOrders
+          .filter((order: any) => {
+            const status = order.status || order.umbrella_status || '';
+            const isPaid = status === 'pago' || 
+                          status === 'PAID' || 
+                          status === 'paid' ||
+                          status === 'PAGO';
+            return isPaid;
+          })
+          .map((order: any) => ({
+            orderNumber: order.order_number,
+            items: order.items || [],
+            totalPrice: order.total_price || 0,
+            paymentMethod: order.payment_method || 'pix',
+            date: order.created_at || order.updated_at || new Date().toISOString(),
+            status: order.status || order.umbrella_status || 'em_preparacao',
+            cpf: order.customer_cpf,
+          }));
         
         allOrders.push(...convertedOrders);
-        console.log(`✅ Carregados ${convertedOrders.length} pedidos do Supabase`);
+        console.log(`✅ Carregados ${convertedOrders.length} pedidos PAGOS do Supabase`);
       } catch (error) {
         console.error('Erro ao carregar pedidos do Supabase:', error);
       }
@@ -65,15 +75,25 @@ export const Orders = ({ onProductClick, onGoToShop }: OrdersProps) => {
         if (savedOrders) {
           const parsedOrders = JSON.parse(savedOrders);
           
-          // Adicionar apenas pedidos que não estão no Supabase (evitar duplicatas)
-          parsedOrders.forEach((localOrder: Order) => {
-            const existsInSupabase = allOrders.some(
-              supabaseOrder => supabaseOrder.orderNumber === localOrder.orderNumber
-            );
-            if (!existsInSupabase) {
-              allOrders.push(localOrder);
-            }
-          });
+          // Adicionar apenas pedidos PAGOS que não estão no Supabase (evitar duplicatas)
+          // ⚠️ IMPORTANTE: Filtrar apenas pedidos com status de pagamento confirmado
+          parsedOrders
+            .filter((localOrder: Order) => {
+              // Apenas pedidos que já foram pagos (status não é 'aguardando_pagamento' ou 'WAITING_PAYMENT')
+              const status = localOrder.status?.toLowerCase() || '';
+              const isPaid = status !== 'aguardando_pagamento' && 
+                            status !== 'waiting_payment' &&
+                            status !== 'pending';
+              return isPaid;
+            })
+            .forEach((localOrder: Order) => {
+              const existsInSupabase = allOrders.some(
+                supabaseOrder => supabaseOrder.orderNumber === localOrder.orderNumber
+              );
+              if (!existsInSupabase) {
+                allOrders.push(localOrder);
+              }
+            });
           
           console.log(`✅ Carregados ${parsedOrders.length} pedidos do localStorage`);
         }
