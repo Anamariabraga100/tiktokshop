@@ -287,11 +287,121 @@ async function checkStatus(req, res) {
       finalStatus = 'EXPIRED';
     }
 
+    // ✅ Se está pago mas Purchase ainda não foi disparado, disparar server-side
+    // Verificar se o campo existe (pode não existir em schemas antigos)
+    const purchaseAlreadyDispatched = order.purchase_dispatched === true || 
+                                     order.purchase_dispatched_at !== null;
+    
+    if (isPaid && !purchaseAlreadyDispatched) {
+      console.log('📤 [SERVER-SIDE] Pagamento confirmado via polling - disparando Purchase...');
+      
+      try {
+        // Buscar dados do cliente
+        let customerData = null;
+        if (order.customer_cpf) {
+          try {
+            const { data: customer } = await supabase
+              .from('customers')
+              .select('*')
+              .eq('cpf', order.customer_cpf.replace(/\D/g, ''))
+              .single();
+            if (customer) customerData = customer;
+          } catch (e) {
+            console.warn('⚠️ Erro ao buscar dados do cliente:', e);
+          }
+        }
+
+        // Construir URL do endpoint
+        const host = req.headers.host || req.headers['x-forwarded-host'];
+        const protocol = req.headers['x-forwarded-proto'] || 'https';
+        const baseUrl = host ? `${protocol}://${host}` : '';
+        const pixelEndpoint = `${baseUrl}/api/facebook-pixel`;
+        
+        const customerName = customerData?.name || '';
+        const nameParts = customerName.split(' ');
+        
+        const purchasePayload = {
+          eventType: 'Purchase',
+          eventName: 'Purchase',
+          orderId: order.order_number, // ✅ Usa orderId como event_id
+          value: order.total_price || 0,
+          currency: 'BRL',
+          numItems: order.items?.reduce((sum, item) => sum + (item.quantity || 1), 0) || 0,
+          contents: order.items?.map(item => ({
+            id: item.id,
+            quantity: item.quantity || 1,
+            item_price: item.price
+          })) || [],
+          userData: {
+            email: customerData?.email,
+            phone: customerData?.phone,
+            firstName: nameParts[0] || '',
+            lastName: nameParts.slice(1).join(' ') || '',
+            externalId: order.customer_cpf?.replace(/\D/g, ''),
+            address: customerData?.address ? {
+              cidade: customerData.address.cidade,
+              estado: customerData.address.estado,
+              cep: customerData.address.cep,
+              country: 'br'
+            } : undefined
+          }
+        };
+
+        console.log('📤 [SERVER-SIDE] Disparando Purchase via polling:', {
+          orderId: purchasePayload.orderId,
+          value: purchasePayload.value,
+          eventId: purchasePayload.orderId
+        });
+
+        const pixelResponse = await fetch(pixelEndpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(purchasePayload)
+        });
+
+        if (pixelResponse.ok) {
+          const pixelResult = await pixelResponse.json();
+          
+          // ✅ Marcar como disparado no banco (proteção contra duplicação)
+          // Tentar atualizar campos (pode não existir em schemas antigos)
+          try {
+            await supabase
+              .from('orders')
+              .update({ 
+                purchase_dispatched: true,
+                purchase_dispatched_at: new Date().toISOString()
+              })
+              .eq('order_number', orderId);
+          } catch (updateError) {
+            // Se os campos não existirem, apenas logar (não quebrar)
+            console.warn('⚠️ Campos purchase_dispatched não existem no banco (ignorado):', updateError);
+          }
+          
+          console.log('✅✅✅ [SERVER-SIDE] Purchase disparado via polling:', {
+            orderId: purchasePayload.orderId,
+            eventId: pixelResult.eventId,
+            source: 'polling'
+          });
+        } else {
+          const errorText = await pixelResponse.text();
+          console.error('❌ [SERVER-SIDE] Erro ao disparar Purchase via polling:', errorText);
+        }
+      } catch (purchaseError) {
+        console.error('❌ [SERVER-SIDE] Erro ao disparar Purchase via polling:', purchaseError);
+        // Não falhar a verificação de status por causa do Purchase
+      }
+    } else if (isPaid && purchaseAlreadyDispatched) {
+      console.log('⏭️ [SERVER-SIDE] Purchase já foi disparado anteriormente para orderId:', orderId);
+    }
+
     console.log('✅ Status do pedido:', {
       orderNumber: order.order_number,
       status: finalStatus,
       isPaid,
-      isExpired
+      isExpired,
+      purchaseDispatched: purchaseAlreadyDispatched
     });
 
     return res.status(200).json({
@@ -306,7 +416,8 @@ async function checkStatus(req, res) {
         paidAt: order.umbrella_paid_at,
         endToEndId: order.umbrella_end_to_end_id,
         amount: order.total_price,
-        expiresAt: order.expires_at
+        expiresAt: order.expires_at,
+        purchaseDispatched: purchaseAlreadyDispatched
       },
       source: 'database'
     });

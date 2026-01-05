@@ -63,20 +63,24 @@ export default async function handler(req, res) {
       fbp
     } = req.body;
 
-    console.log('📤 Enviando evento para Facebook Conversions API:', {
+    console.log('📤 [SERVER-SIDE] Enviando evento para Facebook Conversions API:', {
       eventName,
       orderId,
+      eventId: orderId, // ✅ event_id = orderId (deduplicação)
       value,
+      currency,
       hasUserData: !!userData,
       hasFbc: !!fbc,
-      hasFbp: !!fbp
+      hasFbp: !!fbp,
+      endpoint: `https://graph.facebook.com/v18.0/${PIXEL_ID}/events`
     });
 
     // Preparar payload para Facebook Conversions API
+    // ✅ Usar orderId como event_id (deduplicação automática do Facebook)
     const eventData = {
       event_name: eventName,
       event_time: Math.floor(Date.now() / 1000),
-      event_id: orderId ? `${orderId}-${Date.now()}` : undefined,
+      event_id: orderId, // ✅ Usar apenas orderId (sem timestamp) para deduplicação correta
       action_source: 'website',
       user_data: {},
       custom_data: {}
@@ -167,13 +171,18 @@ export default async function handler(req, res) {
       access_token: ACCESS_TOKEN
     };
 
-    console.log('📤 Payload para Facebook:', {
+    console.log('📤 [SERVER-SIDE] Payload para Facebook CAPI:', {
       pixelId: PIXEL_ID,
       eventName: eventData.event_name,
+      eventId: eventData.event_id, // ✅ orderId como event_id
+      eventTime: eventData.event_time,
+      currency: eventData.custom_data.currency,
+      value: eventData.custom_data.value,
       hasUserData: Object.keys(eventData.user_data).length > 0,
       hasCustomData: Object.keys(eventData.custom_data).length > 0,
       hasFbc: !!fbc,
-      hasFbp: !!fbp
+      hasFbp: !!fbp,
+      endpoint: conversionsApiUrl
     });
 
     const response = await fetch(conversionsApiUrl, {
@@ -195,9 +204,12 @@ export default async function handler(req, res) {
       });
     }
 
-    console.log('✅ Evento enviado com sucesso para Facebook Conversions API:', {
+    console.log('✅✅✅ [SERVER-SIDE] Evento Purchase enviado com sucesso para Facebook CAPI:', {
+      orderId,
       eventId: result.events_received?.[0]?.event_id,
-      orderId
+      eventsReceived: result.events_received?.length || 0,
+      messages: result.messages || [],
+      endpoint: conversionsApiUrl
     });
 
     return res.status(200).json({

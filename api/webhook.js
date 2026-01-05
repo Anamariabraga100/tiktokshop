@@ -103,6 +103,15 @@ export default async function handler(req, res) {
               }
             }
 
+            // ✅ Verificar se Purchase já foi disparado (proteção contra duplicação)
+            // Verificar se o campo existe no banco (pode não existir em schemas antigos)
+            const purchaseAlreadyDispatched = order.purchase_dispatched === true || 
+                                             order.purchase_dispatched_at !== null;
+            
+            if (purchaseAlreadyDispatched) {
+              console.log('⏭️ [SERVER-SIDE] Purchase já foi disparado anteriormente para orderId:', orderId);
+            }
+
             // Atualizar pedido no banco
             const updateData = {
               umbrella_status: status,
@@ -125,8 +134,9 @@ export default async function handler(req, res) {
               console.log('✅ Pedido atualizado no banco:', updatedOrder.order_number);
             }
 
-            // Disparar evento Purchase para Facebook Pixel via API
-            try {
+            // ✅ Disparar Purchase server-side APENAS se ainda não foi disparado
+            if (!purchaseAlreadyDispatched) {
+              try {
               const host = req.headers.host || req.headers['x-forwarded-host'];
               const protocol = req.headers['x-forwarded-proto'] || 'https';
               const baseUrl = host ? `${protocol}://${host}` : '';
@@ -162,27 +172,52 @@ export default async function handler(req, res) {
                 }
               };
 
-              console.log('📤 Disparando Purchase para Facebook Pixel:', {
-                orderId: purchasePayload.orderId,
-                value: purchasePayload.value
-              });
+                console.log('📤 [SERVER-SIDE] Disparando Purchase para Facebook CAPI:', {
+                  orderId: purchasePayload.orderId,
+                  value: purchasePayload.value,
+                  eventId: purchasePayload.orderId // ✅ Usa orderId como event_id
+                });
 
-              const pixelResponse = await fetch(pixelEndpoint, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(purchasePayload)
-              });
+                const pixelResponse = await fetch(pixelEndpoint, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json'
+                  },
+                  body: JSON.stringify(purchasePayload)
+                });
 
-              if (pixelResponse.ok) {
-                const pixelResult = await pixelResponse.json();
-                console.log('✅ Purchase disparado com sucesso:', pixelResult);
-              } else {
-                console.error('❌ Erro ao disparar Purchase:', await pixelResponse.text());
+                if (pixelResponse.ok) {
+                  const pixelResult = await pixelResponse.json();
+                  
+                  // ✅ Marcar como disparado no banco (proteção contra duplicação)
+                  // Tentar atualizar campos (pode não existir em schemas antigos)
+                  try {
+                    await supabase
+                      .from('orders')
+                      .update({ 
+                        purchase_dispatched: true,
+                        purchase_dispatched_at: new Date().toISOString()
+                      })
+                      .eq('order_number', orderId);
+                  } catch (updateError) {
+                    // Se os campos não existirem, apenas logar (não quebrar)
+                    console.warn('⚠️ Campos purchase_dispatched não existem no banco (ignorado):', updateError);
+                  }
+                  
+                  console.log('✅✅✅ [SERVER-SIDE] Purchase disparado com sucesso para Facebook CAPI:', {
+                    orderId: purchasePayload.orderId,
+                    eventId: pixelResult.eventId,
+                    source: 'webhook'
+                  });
+                } else {
+                  const errorText = await pixelResponse.text();
+                  console.error('❌ [SERVER-SIDE] Erro ao disparar Purchase:', errorText);
+                }
+              } catch (pixelError) {
+                console.error('❌ [SERVER-SIDE] Erro ao disparar Purchase para Facebook Pixel:', pixelError);
               }
-            } catch (pixelError) {
-              console.error('❌ Erro ao disparar Purchase para Facebook Pixel:', pixelError);
+            } else {
+              console.log('⏭️ [SERVER-SIDE] Purchase ignorado - já foi disparado anteriormente para orderId:', orderId);
             }
           } else {
             console.warn('⚠️ Pedido não encontrado para orderId:', orderId);
