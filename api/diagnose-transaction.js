@@ -79,7 +79,7 @@ export default async function handler(req, res) {
 
     // 2. Buscar pedido no banco
     let orderInDB = null;
-    if (supabase) {
+    if (supabase && typeof supabase.from === 'function') {
       try {
         const { data, error } = await supabase
           .from('orders')
@@ -109,7 +109,7 @@ export default async function handler(req, res) {
 
     // 4. Se estiver pago no UmbrellaPag mas não no banco, atualizar
     let updateResult = null;
-    if (isPaidInUmbrella && !isPaidInDB && orderInDB && supabase) {
+    if (isPaidInUmbrella && !isPaidInDB && orderInDB && supabase && typeof supabase.from === 'function') {
       console.log('🔄 Atualizando pedido no banco para PAID...');
       try {
         const { data: updatedOrder, error: updateError } = await supabase

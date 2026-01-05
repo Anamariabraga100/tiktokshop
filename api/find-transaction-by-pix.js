@@ -38,7 +38,7 @@ export default async function handler(req, res) {
 
     // Buscar no banco de dados
     let orders = [];
-    if (supabase) {
+    if (supabase && typeof supabase.from === 'function') {
       try {
         // Buscar por código PIX exato
         const { data: exactMatch, error: exactError } = await supabase
@@ -72,18 +72,31 @@ export default async function handler(req, res) {
 
         // Se ainda não encontrou, buscar por substring (caso o código tenha sido truncado)
         if (orders.length === 0) {
-          const { data: substringMatch, error: substringError } = await supabase
+          const substring = pixCode.substring(0, 50);
+          // Buscar separadamente por cada campo
+          const { data: pixCodeMatch, error: pixCodeError } = await supabase
             .from('orders')
             .select('*')
-            .or(`pix_code.ilike.%${pixCode.substring(0, 50)}%,umbrella_qr_code.ilike.%${pixCode.substring(0, 50)}%`)
+            .ilike('pix_code', `%${substring}%`)
             .order('created_at', { ascending: false })
             .limit(10);
 
-          if (substringError && substringError.code !== 'PGRST116') {
-            console.error('❌ Erro ao buscar por substring:', substringError);
-          } else if (substringMatch && substringMatch.length > 0) {
-            orders = substringMatch;
-            console.log('✅ Encontrado por substring:', orders.length);
+          if (!pixCodeError && pixCodeMatch && pixCodeMatch.length > 0) {
+            orders = pixCodeMatch;
+            console.log('✅ Encontrado por substring no pix_code:', orders.length);
+          } else {
+            // Tentar buscar no umbrella_qr_code
+            const { data: umbrellaMatch, error: umbrellaError } = await supabase
+              .from('orders')
+              .select('*')
+              .ilike('umbrella_qr_code', `%${substring}%`)
+              .order('created_at', { ascending: false })
+              .limit(10);
+
+            if (!umbrellaError && umbrellaMatch && umbrellaMatch.length > 0) {
+              orders = umbrellaMatch;
+              console.log('✅ Encontrado por substring no umbrella_qr_code:', orders.length);
+            }
           }
         }
 
