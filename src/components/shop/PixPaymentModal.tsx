@@ -24,6 +24,7 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
   const [isProcessing, setIsProcessing] = useState(false);
   const [pixCode, setPixCode] = useState<string>('');
   const [umbrellaTransaction, setUmbrellaTransaction] = useState<any>(null);
+  const [orderId, setOrderId] = useState<string | null>(null); // ✂️ CORTE 2: Usar orderId no polling
   const [timeRemaining, setTimeRemaining] = useState<number>(600); // 10 minutos em segundos
   const [isExpired, setIsExpired] = useState(false);
   const [isPaid, setIsPaid] = useState(false);
@@ -119,32 +120,33 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
       pollingRef.current = null;
     }
 
+    // ✂️ CORTE 1: Polling só no banco - SEM gateway
     // Só fazer polling se:
     // - Modal estiver aberto
-    // - PIX foi gerado
+    // - orderId disponível (chave primária lógica)
     // - Não expirou
     // - Ainda não foi pago (verificar ref)
-    if (!isOpen || !umbrellaTransaction?.id || isExpired || isPaidRef.current) {
+    if (!isOpen || !orderId || isExpired || isPaidRef.current) {
       console.log('⏸️ Polling não iniciado:', {
         isOpen,
-        hasTransactionId: !!umbrellaTransaction?.id,
+        hasOrderId: !!orderId,
         isExpired,
         isPaid: isPaidRef.current
       });
     }
 
-    if (isOpen && umbrellaTransaction?.id && !isExpired && !isPaidRef.current) {
-      console.log('🔄 Iniciando polling para verificar pagamento...', {
-        transactionId: umbrellaTransaction.id,
+    if (isOpen && orderId && !isExpired && !isPaidRef.current) {
+      console.log('🔄 Iniciando polling para verificar pagamento (SOMENTE banco)...', {
+        orderId: orderId,
         pixGeneratedAt: pixGeneratedAtRef.current ? new Date(pixGeneratedAtRef.current).toISOString() : 'não definido'
       });
 
       const checkPaymentStatus = async () => {
         try {
           const apiUrl = import.meta.env.VITE_API_URL || '/api';
-          console.log(`🔍 Verificando status do pagamento: ${apiUrl}/order-status?transactionId=${umbrellaTransaction.id}`);
+          console.log(`🔍 Verificando status do pagamento: ${apiUrl}/pix?orderId=${orderId}`);
           
-          const response = await fetch(`${apiUrl}/order-status?transactionId=${umbrellaTransaction.id}`);
+          const response = await fetch(`${apiUrl}/pix?orderId=${orderId}`);
           
           if (!response.ok) {
             console.warn('⚠️ Erro ao verificar status do pagamento:', response.status);
@@ -152,12 +154,20 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
           }
 
           const result = await response.json();
-          console.log('📊 Resultado da verificação:', {
+          console.log('📊 Resultado da verificação (banco):', {
             success: result.success,
             isPaid: result.isPaid,
-            status: result.transaction?.status,
-            transactionId: umbrellaTransaction.id
+            isExpired: result.isExpired,
+            status: result.status,
+            orderId: orderId
           });
+          
+          // Verificar se expirou
+          if (result.isExpired) {
+            console.log('⏰ PIX expirado');
+            setIsExpired(true);
+            return;
+          }
           
           if (result.success && result.isPaid) {
             console.log('✅ Pagamento confirmado via polling!');
@@ -283,7 +293,7 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
         console.log(`⏱️ Próxima verificação em ${interval / 1000}s`);
         pollingRef.current = setTimeout(() => {
           // Verificar se ainda deve continuar o polling (usar ref para evitar problemas de closure)
-          if (!isOpen || !umbrellaTransaction?.id || isExpired || isPaidRef.current) {
+          if (!isOpen || !orderId || isExpired || isPaidRef.current) {
             pollingRef.current = null;
             return;
           }
@@ -323,7 +333,7 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
         pollingRef.current = null;
       }
     };
-  }, [isOpen, umbrellaTransaction?.id, isExpired, items, finalPrice, customerData, isFirstPurchase, markPurchaseCompleted, navigate, onPaymentComplete]);
+  }, [isOpen, orderId, isExpired, items, finalPrice, customerData, isFirstPurchase, markPurchaseCompleted, navigate, onPaymentComplete]);
 
   // Formatar tempo restante
   const formatTime = (seconds: number): string => {
@@ -406,11 +416,18 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
           
           console.log('✅ Transação criada:', {
             id: transaction.id,
+            orderId: transaction.orderId,
             status: transaction.status,
             hasQrCode: !!(transaction.qrCode || transaction.pix?.qrCode),
           });
           
           setUmbrellaTransaction(transaction);
+          
+          // ✂️ CORTE 2: Armazenar orderId para polling
+          if (transaction.orderId) {
+            setOrderId(transaction.orderId);
+            console.log('✅ OrderId armazenado para polling:', transaction.orderId);
+          }
           
           // Obter QR Code PIX (pode estar em diferentes campos)
           const qrCode = transaction.qrCode || transaction.pix?.qrCode || transaction.pix?.qrCodeImage || '';
@@ -420,7 +437,7 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
             pixGeneratedAtRef.current = Date.now(); // Marcar quando PIX foi gerado
             console.log('✅ QR Code obtido com sucesso', {
               timestamp: new Date(pixGeneratedAtRef.current).toISOString(),
-              transactionId: transaction.id
+              orderId: transaction.orderId
             });
             
             // Disparar evento pix_gerado
@@ -476,6 +493,7 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
     
     setPixCode('');
     setUmbrellaTransaction(null);
+    setOrderId(null); // Resetar orderId
     setIsExpired(false);
     setIsPaid(false);
     isPaidRef.current = false; // Resetar ref

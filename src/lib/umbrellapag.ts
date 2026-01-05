@@ -206,10 +206,10 @@ export const createPixTransaction = async (
     throw new Error('Valor inválido');
   }
 
-  // Usar a função serverless da Vercel (/api/create-pix-transaction)
+  // Usar a função serverless da Vercel (/api/pix)
   // Isso evita problemas de CORS e mantém a API Key segura no backend
   const apiUrl = import.meta.env.VITE_API_URL || '/api';
-  const endpoint = `${apiUrl}/create-pix-transaction`;
+  const endpoint = `${apiUrl}/pix`;
 
   // Preparar payload no formato correto que o backend espera
   const payload = {

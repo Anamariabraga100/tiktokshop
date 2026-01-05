@@ -1,5 +1,5 @@
 // Vercel Serverless Function para receber webhook do UmbrellaPag
-// Rota: /api/webhook-umbrellapag
+// Rota: /api/webhook
 // ESM PURO - package.json tem "type": "module"
 
 import { supabase } from './lib/supabase.js';
@@ -33,7 +33,7 @@ export default async function handler(req, res) {
       paidAt,
       endToEndId,
       amount,
-      fullBody: JSON.stringify(req.body, null, 2), // Log completo do body
+      fullBody: JSON.stringify(req.body, null, 2),
       headers: {
         'user-agent': req.headers['user-agent'],
         'content-type': req.headers['content-type']
@@ -108,13 +108,11 @@ export default async function handler(req, res) {
 
             // Disparar evento Purchase para Facebook Pixel via API
             try {
-              // Construir URL do endpoint baseado no host da requisição
               const host = req.headers.host || req.headers['x-forwarded-host'];
               const protocol = req.headers['x-forwarded-proto'] || 'https';
               const baseUrl = host ? `${protocol}://${host}` : '';
               const pixelEndpoint = `${baseUrl}/api/facebook-pixel`;
               
-              // Preparar dados do cliente para Purchase
               const customerName = customerData?.name || '';
               const nameParts = customerName.split(' ');
               
@@ -150,7 +148,6 @@ export default async function handler(req, res) {
                 value: purchasePayload.value
               });
 
-              // Chamar endpoint do Facebook Pixel (serverless)
               const pixelResponse = await fetch(pixelEndpoint, {
                 method: 'POST',
                 headers: {
@@ -167,14 +164,12 @@ export default async function handler(req, res) {
               }
             } catch (pixelError) {
               console.error('❌ Erro ao disparar Purchase para Facebook Pixel:', pixelError);
-              // Não falhar o webhook por causa do tracking
             }
           } else {
             console.warn('⚠️ Pedido não encontrado para transactionId:', transactionId);
           }
         } catch (dbError) {
           console.error('❌ Erro ao processar webhook:', dbError);
-          // Não falhar o webhook, apenas logar
         }
       } else {
         console.warn('⚠️ Supabase não configurado, pulando atualização do banco');
@@ -191,10 +186,11 @@ export default async function handler(req, res) {
 
   } catch (err) {
     console.error('❌ Erro no webhook:', err);
-    // Sempre retornar 200 para o UmbrellaPag (não queremos que ele tente novamente infinitamente)
+    // Sempre retornar 200 para o UmbrellaPag
     return res.status(200).json({
       success: false,
       error: err.message || 'Erro desconhecido'
     });
   }
 }
+
