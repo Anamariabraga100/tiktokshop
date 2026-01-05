@@ -28,6 +28,8 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
   const [timeRemaining, setTimeRemaining] = useState<number>(600); // 10 minutos em segundos
   const [isExpired, setIsExpired] = useState(false);
   const [isPaid, setIsPaid] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<string>(''); // Mensagem de status dinâmica
+  const [isPolling, setIsPolling] = useState<boolean>(false); // Indica se está fazendo polling
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const pixGeneratedAtRef = useRef<number | null>(null); // Timestamp quando PIX foi gerado
@@ -143,6 +145,9 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
 
       const checkPaymentStatus = async () => {
         try {
+          setIsPolling(true);
+          setStatusMessage('Aguardando confirmação do pagamento...');
+          
           const apiUrl = import.meta.env.VITE_API_URL || '/api';
           console.log(`🔍 Verificando status do pagamento: ${apiUrl}/pix?orderId=${orderId}`);
           
@@ -150,6 +155,8 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
           
           if (!response.ok) {
             console.warn('⚠️ Erro ao verificar status do pagamento:', response.status);
+            setStatusMessage('Verificando pagamento...');
+            setIsPolling(false);
             return;
           }
 
@@ -166,6 +173,8 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
           if (result.isExpired) {
             console.log('⏰ PIX expirado');
             setIsExpired(true);
+            setStatusMessage('Código PIX expirado. Gere um novo código.');
+            setIsPolling(false);
             return;
           }
           
@@ -173,6 +182,8 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
             console.log('✅ Pagamento confirmado via polling!');
             setIsPaid(true);
             isPaidRef.current = true; // Marcar no ref também
+            setStatusMessage('✅ Pagamento confirmado! Redirecionando...');
+            setIsPolling(false);
             
             // Limpar polling
             if (pollingRef.current) {
@@ -180,46 +191,53 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
               pollingRef.current = null;
             }
             
-            // Verificar se Purchase já foi disparado (via webhook)
-            // Se o status já está "pago" no banco, o webhook provavelmente já disparou
-            // Mas vamos disparar também para garantir (Facebook deduplica por order_id)
-            console.log('📤 Disparando Purchase via polling (webhook pode ter falhado)');
-            
-            // Disparar Purchase para Facebook Pixel
-            const regularItems = items.filter(item => !item.isGift);
-            const contents = regularItems.map(item => ({
-              id: item.id,
-              quantity: item.quantity,
-              item_price: item.price,
-            }));
-            
-            const nameParts = customerData?.name?.trim().split(/\s+/) || [];
-            const firstName = nameParts[0] || '';
-            const lastName = nameParts.slice(1).join(' ') || '';
-            
-            trackPurchase(
-              umbrellaTransaction.orderId || umbrellaTransaction.id,
-              finalPrice,
-              regularItems.reduce((sum, item) => sum + item.quantity, 0),
-              contents,
-              {
-                email: customerData?.email,
-                phone: customerData?.phone,
-                name: customerData?.name,
-                firstName: firstName,
-                lastName: lastName,
-                cpf: customerData?.cpf,
-                externalId: customerData?.cpf?.replace(/\D/g, ''),
-                address: customerData?.address ? {
-                  cidade: customerData.address.cidade,
-                  estado: customerData.address.estado,
-                  cep: customerData.address.cep,
-                  country: 'br',
-                } : undefined,
+            // Disparar Purchase para Facebook Pixel (usando orderId como event_id)
+            try {
+              const regularItems = items.filter(item => !item.isGift);
+              const contents = regularItems.map(item => ({
+                id: item.id,
+                quantity: item.quantity,
+                item_price: item.price,
+              }));
+              
+              const nameParts = customerData?.name?.trim().split(/\s+/) || [];
+              const firstName = nameParts[0] || '';
+              const lastName = nameParts.slice(1).join(' ') || '';
+              
+              // Usar orderId como event_id (Facebook deduplica automaticamente)
+              trackPurchase(
+                orderId, // ✅ Usar orderId como event_id
+                finalPrice,
+                regularItems.reduce((sum, item) => sum + item.quantity, 0),
+                contents,
+                {
+                  email: customerData?.email,
+                  phone: customerData?.phone,
+                  name: customerData?.name,
+                  firstName: firstName,
+                  lastName: lastName,
+                  cpf: customerData?.cpf,
+                  externalId: customerData?.cpf?.replace(/\D/g, ''),
+                  address: customerData?.address ? {
+                    cidade: customerData.address.cidade,
+                    estado: customerData.address.estado,
+                    cep: customerData.address.cep,
+                    country: 'br',
+                  } : undefined,
+                }
+              );
+              
+              console.log('✅ Purchase disparado via polling com orderId:', orderId);
+            } catch (pixelError: any) {
+              // Ignorar erros de AdBlock (ERR_BLOCKED_BY_CLIENT)
+              if (pixelError?.message?.includes('ERR_BLOCKED_BY_CLIENT') || 
+                  pixelError?.message?.includes('blocked')) {
+                console.warn('⚠️ Facebook Pixel bloqueado por AdBlock (ignorado)');
+              } else {
+                console.error('❌ Erro ao disparar Purchase:', pixelError);
               }
-            );
-            
-            console.log('✅ Purchase disparado via polling');
+              // Não falhar o fluxo por causa do Pixel
+            }
             
             // Marcar compra como concluída
             if (isFirstPurchase()) {
@@ -253,48 +271,32 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
           console.error('❌ Erro ao verificar status do pagamento:', error);
           console.error('❌ Detalhes do erro:', {
             message: error instanceof Error ? error.message : String(error),
-            transactionId: umbrellaTransaction?.id
+            orderId: orderId
           });
+          setStatusMessage('Verificando pagamento...');
+          setIsPolling(false);
           // Não parar o polling por causa de um erro temporário
+        } finally {
+          // Garantir que isPolling seja resetado
+          setIsPolling(false);
         }
       };
 
-      // Função para calcular intervalo progressivo baseado no tempo decorrido
-      const getPollingInterval = (): number => {
-        if (!pixGeneratedAtRef.current) return 10000; // Default 10s se não souber quando foi gerado
-        
-        const elapsedSeconds = (Date.now() - pixGeneratedAtRef.current) / 1000;
-        
-        if (elapsedSeconds <= 30) {
-          return 5000; // 0-30s: a cada 5s
-        } else if (elapsedSeconds <= 90) {
-          return 9000; // 30-90s: a cada 9s (média entre 8-10s)
-        } else if (elapsedSeconds <= 150) {
-          return 13500; // 90-150s: a cada 13.5s (média entre 12-15s)
-        } else {
-          return -1; // >150s: parar
-        }
-      };
+      // Intervalo fixo de 7-8 segundos (recomendado)
+      const POLLING_INTERVAL = 7500; // 7.5 segundos (média entre 7-8s)
 
-      // Função recursiva para polling progressivo
+      // Função recursiva para polling com intervalo fixo
       const scheduleNextCheck = () => {
         if (pollingRef.current) {
           clearTimeout(pollingRef.current);
         }
 
-        const interval = getPollingInterval();
-        
-        if (interval === -1) {
-          console.log('⏸️ Polling parado (mais de 150s desde geração)');
-          pollingRef.current = null;
-          return;
-        }
-
-        console.log(`⏱️ Próxima verificação em ${interval / 1000}s`);
+        console.log(`⏱️ Próxima verificação em ${POLLING_INTERVAL / 1000}s`);
         pollingRef.current = setTimeout(() => {
           // Verificar se ainda deve continuar o polling (usar ref para evitar problemas de closure)
           if (!isOpen || !orderId || isExpired || isPaidRef.current) {
             pollingRef.current = null;
+            setIsPolling(false);
             return;
           }
           
@@ -309,7 +311,7 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
               scheduleNextCheck();
             }
           });
-        }, interval);
+        }, POLLING_INTERVAL);
       };
 
       // Verificar imediatamente
@@ -496,6 +498,8 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
     setOrderId(null); // Resetar orderId
     setIsExpired(false);
     setIsPaid(false);
+    setStatusMessage(''); // Resetar mensagem
+    setIsPolling(false); // Resetar polling
     isPaidRef.current = false; // Resetar ref
     pixGeneratedAtRef.current = null; // Resetar timestamp
     setTimeRemaining(600);
@@ -812,15 +816,26 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
                 </div>
               )}
 
-              {/* Status de pagamento */}
-              {pixCode && !isExpired && (
+              {/* Status de pagamento - Mensagem dinâmica */}
+              {pixCode && !isExpired && !isPaid && (
                 <div className="mb-4 text-center">
-                  <div className="inline-flex items-center gap-2 bg-muted/50 px-4 py-2 rounded-full">
-                    <Clock className="w-4 h-4 text-orange-600 dark:text-orange-400" />
+                  <div className="inline-flex items-center gap-2 bg-muted/50 px-4 py-3 rounded-full">
+                    {isPolling ? (
+                      <motion.div
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                        className="w-4 h-4 border-2 border-orange-600 border-t-transparent rounded-full"
+                      />
+                    ) : (
+                      <Clock className="w-4 h-4 text-orange-600 dark:text-orange-400" />
+                    )}
                     <p className="text-sm font-semibold text-foreground">
-                      ⏳ Copie o PIX e pague para confirmar seu pedido
+                      {statusMessage || 'Aguardando confirmação do pagamento...'}
                     </p>
                   </div>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Assim que o PIX for pago, seu pedido será confirmado automaticamente.
+                  </p>
                 </div>
               )}
 

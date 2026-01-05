@@ -241,8 +241,12 @@ export const trackInitiateCheckout = (
   window.fbq('track', 'InitiateCheckout', params);
 };
 
+// Controle de Purchase já disparado (evitar duplicação)
+const purchaseDispatched = new Set<string>();
+
 /**
  * Rastreia compra concluída
+ * ✅ Usa orderId como event_id para deduplicação automática do Facebook
  */
 export const trackPurchase = (
   orderId: string,
@@ -265,15 +269,34 @@ export const trackPurchase = (
     };
   }
 ) => {
-  if (typeof window === 'undefined' || !window.fbq) return;
+  if (typeof window === 'undefined') {
+    console.warn('⚠️ window não disponível, pulando Purchase');
+    return;
+  }
+
+  // Verificar se já foi disparado (evitar duplicação)
+  if (purchaseDispatched.has(orderId)) {
+    console.log('⏭️ Purchase já disparado para orderId:', orderId);
+    return;
+  }
+
+  // Verificar se fbq está disponível (pode estar bloqueado por AdBlock)
+  if (!window.fbq) {
+    console.warn('⚠️ Facebook Pixel não disponível (pode estar bloqueado por AdBlock)');
+    // Não falhar o fluxo, apenas logar
+    return;
+  }
   
-  const params: any = {
-    value: value,
-    currency: 'BRL',
-    num_items: numItems,
-    contents: contents,
-    order_id: orderId,
-  };
+  try {
+    const params: any = {
+      value: value,
+      currency: 'BRL',
+      num_items: numItems,
+      contents: contents,
+      order_id: orderId,
+      // ✅ Usar orderId como event_id para deduplicação automática
+      eventID: orderId,
+    };
 
   // Adicionar fbc e fbp para melhor correspondência (CRÍTICO para atribuição correta)
   const fbc = getFbc();
@@ -315,19 +338,34 @@ export const trackPurchase = (
     }
   }
 
-  console.log('📊 Enviando Purchase com parâmetros completos:', {
-    orderId,
-    value,
-    numItems,
-    hasFbc: !!fbc,
-    hasFbp: !!fbp,
-    hasPhone: !!(userData?.phone),
-    hasAddress: !!(userData?.address),
-  });
+    console.log('📊 Enviando Purchase com parâmetros completos:', {
+      orderId,
+      eventID: orderId, // ✅ event_id para deduplicação
+      value,
+      numItems,
+      hasFbc: !!fbc,
+      hasFbp: !!fbp,
+      hasPhone: !!(userData?.phone),
+      hasAddress: !!(userData?.address),
+    });
 
-  window.fbq('track', 'Purchase', params);
-  
-  console.log('✅✅✅ Purchase enviado com fbc/fbp para melhor atribuição de campanha');
+    window.fbq('track', 'Purchase', params);
+    
+    // Marcar como disparado
+    purchaseDispatched.add(orderId);
+    
+    console.log('✅✅✅ Purchase enviado com orderId como event_id (deduplicação automática)');
+  } catch (error: any) {
+    // Ignorar erros de AdBlock (ERR_BLOCKED_BY_CLIENT)
+    if (error?.message?.includes('ERR_BLOCKED_BY_CLIENT') || 
+        error?.message?.includes('blocked') ||
+        error?.name === 'BlockedByClient') {
+      console.warn('⚠️ Facebook Pixel bloqueado por AdBlock (ignorado)');
+    } else {
+      console.error('❌ Erro ao disparar Purchase:', error);
+    }
+    // Não falhar o fluxo por causa do Pixel
+  }
 };
 
 /**
