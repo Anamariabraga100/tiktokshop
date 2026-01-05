@@ -115,7 +115,7 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
   useEffect(() => {
     // Limpar polling anterior
     if (pollingRef.current) {
-      clearInterval(pollingRef.current);
+      clearTimeout(pollingRef.current);
       pollingRef.current = null;
     }
 
@@ -124,10 +124,26 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
     // - PIX foi gerado
     // - Não expirou
     // - Ainda não foi pago (verificar ref)
+    if (!isOpen || !umbrellaTransaction?.id || isExpired || isPaidRef.current) {
+      console.log('⏸️ Polling não iniciado:', {
+        isOpen,
+        hasTransactionId: !!umbrellaTransaction?.id,
+        isExpired,
+        isPaid: isPaidRef.current
+      });
+    }
+
     if (isOpen && umbrellaTransaction?.id && !isExpired && !isPaidRef.current) {
+      console.log('🔄 Iniciando polling para verificar pagamento...', {
+        transactionId: umbrellaTransaction.id,
+        pixGeneratedAt: pixGeneratedAtRef.current ? new Date(pixGeneratedAtRef.current).toISOString() : 'não definido'
+      });
+
       const checkPaymentStatus = async () => {
         try {
           const apiUrl = import.meta.env.VITE_API_URL || '/api';
+          console.log(`🔍 Verificando status do pagamento: ${apiUrl}/check-payment-status?transactionId=${umbrellaTransaction.id}`);
+          
           const response = await fetch(`${apiUrl}/check-payment-status?transactionId=${umbrellaTransaction.id}`);
           
           if (!response.ok) {
@@ -136,6 +152,12 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
           }
 
           const result = await response.json();
+          console.log('📊 Resultado da verificação:', {
+            success: result.success,
+            isPaid: result.isPaid,
+            status: result.transaction?.status,
+            transactionId: umbrellaTransaction.id
+          });
           
           if (result.success && result.isPaid) {
             console.log('✅ Pagamento confirmado via polling!');
@@ -219,6 +241,10 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
           }
         } catch (error) {
           console.error('❌ Erro ao verificar status do pagamento:', error);
+          console.error('❌ Detalhes do erro:', {
+            message: error instanceof Error ? error.message : String(error),
+            transactionId: umbrellaTransaction?.id
+          });
           // Não parar o polling por causa de um erro temporário
         }
       };
@@ -254,6 +280,7 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
           return;
         }
 
+        console.log(`⏱️ Próxima verificação em ${interval / 1000}s`);
         pollingRef.current = setTimeout(() => {
           // Verificar se ainda deve continuar o polling (usar ref para evitar problemas de closure)
           if (!isOpen || !umbrellaTransaction?.id || isExpired || isPaidRef.current) {
@@ -291,11 +318,12 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
 
     return () => {
       if (pollingRef.current) {
-        clearInterval(pollingRef.current);
+        console.log('🧹 Limpando polling...');
+        clearTimeout(pollingRef.current);
         pollingRef.current = null;
       }
     };
-  }, [isOpen, umbrellaTransaction?.id, isExpired, isPaid, items, finalPrice, customerData, isFirstPurchase, markPurchaseCompleted, navigate, onPaymentComplete]);
+  }, [isOpen, umbrellaTransaction?.id, isExpired, items, finalPrice, customerData, isFirstPurchase, markPurchaseCompleted, navigate, onPaymentComplete]);
 
   // Formatar tempo restante
   const formatTime = (seconds: number): string => {
@@ -390,7 +418,10 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
           if (qrCode) {
             setPixCode(qrCode);
             pixGeneratedAtRef.current = Date.now(); // Marcar quando PIX foi gerado
-            console.log('✅ QR Code obtido com sucesso');
+            console.log('✅ QR Code obtido com sucesso', {
+              timestamp: new Date(pixGeneratedAtRef.current).toISOString(),
+              transactionId: transaction.id
+            });
             
             // Disparar evento pix_gerado
             trackPixGerado(finalPrice, transaction.id);
