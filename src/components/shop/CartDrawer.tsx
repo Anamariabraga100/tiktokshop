@@ -79,7 +79,8 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
     // Sempre calcular frete, mesmo sem endereço
     // Se não tem endereço, retornar frete padrão sem info de entrega
     if (!hasAddress) {
-      const defaultPrice = hasFreeShipping ? 0 : 9.90;
+      // Sem endereço, sempre mostrar 9.90 a menos que o total seja realmente >= 50
+      const defaultPrice = totalPrice >= freeShippingThreshold ? 0 : 9.90;
       return { 
         deliveryInfo: null, 
         shippingPrice: defaultPrice, 
@@ -132,16 +133,17 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
     let price: number;
     const savedShippingPrice = localStorage.getItem('currentShippingPrice');
     
-    // Se tem frete grátis, sempre usar 0 (não usar valor salvo)
-    if (hasFreeShipping) {
+    // Se tem frete grátis (total >= 50), sempre usar 0
+    if (totalPrice >= freeShippingThreshold) {
       price = 0;
       localStorage.setItem('currentShippingPrice', '0');
-    } else if (savedShippingPrice && hasAddress) {
-      // Usar valor salvo para manter consistência (apenas se não for frete grátis)
-      price = parseFloat(savedShippingPrice);
+    } else if (savedShippingPrice && hasAddress && savedShippingPrice !== '0') {
+      // Usar valor salvo para manter consistência (apenas se não for '0' e não for frete grátis)
+      const parsedPrice = parseFloat(savedShippingPrice);
+      price = parsedPrice > 0 ? parsedPrice : 9.90;
     } else {
       // Frete fixo de R$ 9,90
-      price = hasAddress ? 9.90 : 9.90;
+      price = 9.90;
       if (hasAddress) {
         localStorage.setItem('currentShippingPrice', price.toString());
       }
@@ -154,7 +156,7 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
       shippingPrice: price,
       formattedShippingPrice: formatted
     };
-  }, [hasAddress, hasFreeShipping]);
+  }, [hasAddress, totalPrice, freeShippingThreshold]);
 
   // Calcular preço final incluindo frete
   const finalPrice = priceAfterPix + shippingPrice;
