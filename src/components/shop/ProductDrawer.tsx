@@ -531,7 +531,9 @@ export const ProductDrawer = memo(({ product, isOpen, onClose, onBuyNow, onProdu
                 <div className="bg-destructive/10 border border-destructive/20 text-destructive text-sm font-medium px-3 py-2 rounded-lg flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Clock className="w-4 h-4" />
-                    O cupom de {activeCoupon.discountPercent}% está expirando
+                    {activeCoupon.id === '2' || activeCoupon.code === 'BRINDE50'
+                      ? 'O brinde está expirando'
+                      : `O cupom de ${activeCoupon.discountPercent}% está expirando`}
                   </div>
                   <span className="font-bold">{formatCouponTime(couponTimeRemaining)}</span>
                 </div>

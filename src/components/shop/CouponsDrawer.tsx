@@ -69,9 +69,11 @@ export const CouponsDrawer = ({ isOpen, onClose }: CouponsDrawerProps) => {
                 <div className="flex items-center gap-2 text-destructive">
                   <Clock className="w-4 h-4" />
                   <span className="text-sm font-medium">
-                    {activeCoupon.discountPercent > 0 
-                      ? `O cupom de ${activeCoupon.discountPercent}% de desconto está expirando`
-                      : 'O cupom de brinde está expirando'}
+                    {activeCoupon.id === '2' || activeCoupon.code === 'BRINDE50'
+                      ? 'O brinde está expirando'
+                      : activeCoupon.discountPercent > 0 
+                        ? `O cupom de ${activeCoupon.discountPercent}% de desconto está expirando`
+                        : 'O cupom está expirando'}
                   </span>
                 </div>
                 <div className="text-2xl font-bold text-destructive mt-1">
