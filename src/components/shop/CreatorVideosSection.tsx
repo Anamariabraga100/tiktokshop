@@ -107,7 +107,7 @@ const VideoItem = ({ video, index, onVideoClick, videoRefs, videoObserverRefs, l
         )}
 
         {/* Likes no lado direito - Estilo TikTok */}
-        <div className="absolute right-2 top-2 flex flex-col items-center gap-1 z-10">
+        <div className="absolute right-2 top-2 flex flex-col items-center gap-1 z-[5]">
           <div className="flex flex-col items-center gap-0.5">
             <Heart className="w-5 h-5 text-white drop-shadow-lg" />
             <span className="text-white text-[10px] font-semibold drop-shadow-lg">

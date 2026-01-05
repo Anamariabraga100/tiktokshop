@@ -597,7 +597,7 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                               </div>
                             </div>
                             <div className="text-right">
-                              {hasFreeShipping ? (
+                              {totalPrice >= freeShippingThreshold ? (
                                 <span className="text-sm font-bold text-success">Grátis</span>
                               ) : (
                                 <span className="text-sm font-bold">R$ {formattedShippingPrice}</span>
@@ -663,7 +663,7 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Frete</span>
                           <span className="font-medium">
-                            {hasFreeShipping ? (
+                            {totalPrice >= freeShippingThreshold ? (
                               <span className="text-success">Grátis</span>
                             ) : (
                               <>R$ {formattedShippingPrice}</>

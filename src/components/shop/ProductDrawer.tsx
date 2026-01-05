@@ -840,7 +840,7 @@ export const ProductDrawer = memo(({ product, isOpen, onClose, onBuyNow, onProdu
             </div>
 
             {/* Bottom Actions */}
-            <div className="sticky bottom-0 bg-card border-t border-border px-4 md:px-6 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]" style={{ paddingTop: '1rem', paddingBottom: 'max(1rem, env(safe-area-inset-bottom, 1rem))' }}>
+            <div className="sticky bottom-0 bg-card border-t border-border px-4 md:px-6 shadow-[0_-2px_10px_rgba(0,0,0,0.05)] z-30" style={{ paddingTop: '1rem', paddingBottom: 'max(1rem, env(safe-area-inset-bottom, 1rem))' }}>
               <div className="flex gap-3 max-w-2xl mx-auto">
                   <motion.button
                     onClick={handleAddToCart}
