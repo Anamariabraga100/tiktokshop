@@ -44,8 +44,8 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
   const freeShippingThreshold = 50;
   const missingForFreeShipping = Math.max(0, freeShippingThreshold - totalPrice);
   const freeShippingProgress = Math.min(100, (totalPrice / freeShippingThreshold) * 100);
-  // Verificar se tem frete grátis da página de agradecimento
-  const freeShippingFromThankYou = localStorage.getItem('freeShippingFromThankYou') === 'true';
+  // Verificar se tem frete grátis da página de agradecimento (apenas se total >= 50)
+  const freeShippingFromThankYou = localStorage.getItem('freeShippingFromThankYou') === 'true' && totalPrice >= freeShippingThreshold;
   const hasFreeShipping = totalPrice >= freeShippingThreshold || freeShippingFromThankYou;
 
   // Outros cupons percentuais são aplicados se ativos
@@ -129,20 +129,15 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
     const monthName = maxDate.toLocaleDateString('pt-BR', { month: 'long' });
     const month = monthName.charAt(0).toUpperCase() + monthName.slice(1);
     
-    // Calcular frete (usar valor salvo se existir, senão calcular e salvar)
+    // Calcular frete baseado no total atual
     let price: number;
-    const savedShippingPrice = localStorage.getItem('currentShippingPrice');
     
     // Se tem frete grátis (total >= 50), sempre usar 0
     if (totalPrice >= freeShippingThreshold) {
       price = 0;
       localStorage.setItem('currentShippingPrice', '0');
-    } else if (savedShippingPrice && hasAddress && savedShippingPrice !== '0') {
-      // Usar valor salvo para manter consistência (apenas se não for '0' e não for frete grátis)
-      const parsedPrice = parseFloat(savedShippingPrice);
-      price = parsedPrice > 0 ? parsedPrice : 9.90;
     } else {
-      // Frete fixo de R$ 9,90
+      // Se total < 50, sempre usar 9.90 (não usar valor salvo '0')
       price = 9.90;
       if (hasAddress) {
         localStorage.setItem('currentShippingPrice', price.toString());
