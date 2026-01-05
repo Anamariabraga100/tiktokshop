@@ -31,7 +31,7 @@ function getAPIKey() {
 // CRIAR TRANSAÇÃO PIX
 async function createTransaction(req, res) {
   try {
-    const { customer, items, totalPrice, metadata } = req.body;
+    const { customer, items, totalPrice, metadata, fbc, fbp } = req.body; // ✅ Receber fbc/fbp do frontend
 
     if (!customer || !customer.name || !customer.cpf) {
       return res.status(400).json({
@@ -175,6 +175,9 @@ async function createTransaction(req, res) {
           umbrella_external_ref: orderId,
           // Campo de expiração para lógica clara
           expires_at: expiresAt,
+          // ✅ Salvar fbc/fbp para usar no webhook (atribuição de campanha)
+          facebook_fbc: fbc || null,
+          facebook_fbp: fbp || null,
         };
 
         const { data: savedOrder, error: saveError } = await supabase
@@ -332,6 +335,9 @@ async function checkStatus(req, res) {
             quantity: item.quantity || 1,
             item_price: item.price
           })) || [],
+          // ✅ Adicionar fbc/fbp do banco (salvos na criação do pedido)
+          fbc: order.facebook_fbc || null,
+          fbp: order.facebook_fbp || null,
           userData: {
             email: customerData?.email,
             phone: customerData?.phone,

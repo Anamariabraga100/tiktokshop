@@ -70,8 +70,9 @@ export default async function handler(req, res) {
       value,
       currency,
       hasUserData: !!userData,
-      hasFbc: !!fbc,
-      hasFbp: !!fbp,
+      fbc: fbc || 'não fornecido',
+      fbp: fbp || 'não fornecido',
+      contentsCount: contents?.length || 0,
       endpoint: `https://graph.facebook.com/v18.0/${PIXEL_ID}/events`
     });
 
@@ -86,13 +87,19 @@ export default async function handler(req, res) {
       custom_data: {}
     };
 
-    // Adicionar fbc e fbp se disponíveis
+    // ✅ Adicionar fbc e fbp diretamente no eventData (formato correto para Conversions API)
     if (fbc) {
+      eventData.fbc = fbc;
       eventData.event_source_url = req.headers.referer || req.headers.origin;
-      // fbc será adicionado via user_data se necessário
+      console.log('✅ fbc incluído no evento:', fbc);
+    } else {
+      console.warn('⚠️ fbc não fornecido - pode afetar atribuição de campanha');
     }
     if (fbp) {
-      // fbp será adicionado via user_data
+      eventData.fbp = fbp;
+      console.log('✅ fbp incluído no evento:', fbp);
+    } else {
+      console.warn('⚠️ fbp não fornecido - pode afetar atribuição de campanha');
     }
 
     // Adicionar user_data (OBRIGATÓRIO: fazer hash SHA256 de todos os dados PII)
@@ -147,21 +154,31 @@ export default async function handler(req, res) {
     if (numItems !== undefined) {
       eventData.custom_data.num_items = numItems;
     }
-    if (contents && contents.length > 0) {
-      eventData.custom_data.contents = contents;
-      eventData.custom_data.content_ids = contents.map(c => c.id);
+    // ✅ Validar e formatar contents corretamente (Facebook exige formato específico)
+    if (contents && Array.isArray(contents) && contents.length > 0) {
+      // Filtrar e validar cada item (deve ter id, quantity e item_price)
+      const validContents = contents
+        .filter(c => c && c.id && typeof c.quantity !== 'undefined' && typeof c.item_price !== 'undefined')
+        .map(c => ({
+          id: String(c.id), // Garantir que é string
+          quantity: Number(c.quantity) || 1, // Garantir que é número
+          item_price: Number(c.item_price) || 0 // Garantir que é número
+        }));
+      
+      if (validContents.length > 0) {
+        eventData.custom_data.contents = validContents;
+        eventData.custom_data.content_ids = validContents.map(c => c.id);
+      } else {
+        console.warn('⚠️ Contents inválido ou vazio após validação');
+      }
+    } else {
+      console.warn('⚠️ Contents não fornecido ou vazio');
     }
     if (orderId) {
       eventData.custom_data.order_id = orderId;
     }
 
-    // Adicionar fbc e fbp diretamente no payload (formato correto para Conversions API)
-    if (fbc) {
-      eventData.fbc = fbc;
-    }
-    if (fbp) {
-      eventData.fbp = fbp;
-    }
+    // fbc e fbp já foram adicionados acima no eventData
 
     // Enviar para Facebook Conversions API
     const conversionsApiUrl = `https://graph.facebook.com/v18.0/${PIXEL_ID}/events`;
@@ -180,8 +197,10 @@ export default async function handler(req, res) {
       value: eventData.custom_data.value,
       hasUserData: Object.keys(eventData.user_data).length > 0,
       hasCustomData: Object.keys(eventData.custom_data).length > 0,
-      hasFbc: !!fbc,
-      hasFbp: !!fbp,
+      contentsCount: eventData.custom_data.contents?.length || 0,
+      contents: eventData.custom_data.contents || [],
+      fbc: eventData.fbc || 'não fornecido',
+      fbp: eventData.fbp || 'não fornecido',
       endpoint: conversionsApiUrl
     });
 

@@ -211,6 +211,27 @@ export const createPixTransaction = async (
   const apiUrl = import.meta.env.VITE_API_URL || '/api';
   const endpoint = `${apiUrl}/pix`;
 
+  // ✅ Obter fbc/fbp do localStorage (para atribuição de campanha)
+  let fbc: string | undefined;
+  let fbp: string | undefined;
+  
+  if (typeof window !== 'undefined') {
+    try {
+      // Buscar fbc do localStorage
+      const savedFbc = localStorage.getItem('_fbc');
+      if (savedFbc) {
+        fbc = savedFbc;
+      }
+      
+      // Buscar fbp do cookie ou window._fbp
+      if (window._fbp) {
+        fbp = window._fbp;
+      }
+    } catch (e) {
+      // Ignorar erro
+    }
+  }
+
   // Preparar payload no formato correto que o backend espera
   const payload = {
     customer: {
@@ -227,6 +248,9 @@ export const createPixTransaction = async (
     })),
     totalPrice: totalPrice,
     metadata,
+    // ✅ Incluir fbc/fbp para atribuição de campanha
+    fbc: fbc || undefined,
+    fbp: fbp || undefined,
   };
 
   // Log explícito do payload ANTES do fetch (conforme tutorial)

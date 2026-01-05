@@ -157,6 +157,9 @@ export default async function handler(req, res) {
                   quantity: item.quantity || 1,
                   item_price: item.price
                 })) || [],
+                // ✅ Adicionar fbc/fbp do banco (salvos na criação do pedido)
+                fbc: order.facebook_fbc || null,
+                fbp: order.facebook_fbp || null,
                 userData: {
                   email: customerData?.email,
                   phone: customerData?.phone,
@@ -175,7 +178,10 @@ export default async function handler(req, res) {
                 console.log('📤 [SERVER-SIDE] Disparando Purchase para Facebook CAPI:', {
                   orderId: purchasePayload.orderId,
                   value: purchasePayload.value,
-                  eventId: purchasePayload.orderId // ✅ Usa orderId como event_id
+                  eventId: purchasePayload.orderId, // ✅ Usa orderId como event_id
+                  hasFbc: !!purchasePayload.fbc,
+                  hasFbp: !!purchasePayload.fbp,
+                  contentsCount: purchasePayload.contents?.length || 0
                 });
 
                 const pixelResponse = await fetch(pixelEndpoint, {
