@@ -32,7 +32,12 @@ export default async function handler(req, res) {
       status,
       paidAt,
       endToEndId,
-      amount
+      amount,
+      fullBody: JSON.stringify(req.body, null, 2), // Log completo do body
+      headers: {
+        'user-agent': req.headers['user-agent'],
+        'content-type': req.headers['content-type']
+      }
     });
 
     // Validar dados obrigatórios

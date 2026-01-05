@@ -138,8 +138,11 @@ export default async function handler(req, res) {
       customer: umbrellaCustomer.name,
       itemsCount: umbrellaItems.length,
       document: normalizedCPF.substring(0, 3) + '***',
-      orderId: orderId // orderId interno (não enviado como externalRef)
+      orderId: orderId, // orderId interno (não enviado como externalRef)
+      postbackUrl: postbackUrl // ⚠️ IMPORTANTE: URL do webhook
     });
+    
+    console.log('📤 Payload completo enviado para UmbrellaPag:', JSON.stringify(payload, null, 2));
 
     // Chamar API UmbrellaPag
     const response = await fetch(ENDPOINT, {
@@ -189,8 +192,15 @@ export default async function handler(req, res) {
     console.log('✅ PIX criado com sucesso:', {
       transactionId: transactionData?.transactionId || transactionData?.id,
       status: transactionData?.status,
-      hasQrCode: !!qrCode
+      hasQrCode: !!qrCode,
+      postbackUrl: postbackUrl,
+      fullResponse: JSON.stringify(transactionData, null, 2)
     });
+    
+    // ⚠️ AVISO: Verificar se o webhook está configurado no painel da UmbrellaPag
+    if (!postbackUrl || !postbackUrl.includes('/api/webhook-umbrellapag')) {
+      console.warn('⚠️ ATENÇÃO: postbackUrl pode estar incorreto:', postbackUrl);
+    }
 
     // Extrair transactionId retornado pela UmbrellaPag
     const transactionId = transactionData?.transactionId || transactionData?.id;
