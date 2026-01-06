@@ -1753,4 +1753,29 @@ Barba, bigode, pelos corporais, cabelo, pelos nasais
       },
     ] as ProductReview[],
   },
+  {
+    id: '29',
+    name: 'Produto Teste',
+    price: 2.99,
+    originalPrice: 9.90,
+    image: product3,
+    rating: 5.0,
+    soldCount: 0,
+    viewCount: 0,
+    likesCount: 0,
+    isHotDeal: false,
+    freeShipping: false,
+    category: 'Acessórios',
+    brand: 'Teste',
+    description: `Produto de teste para validação do sistema de pagamento.
+
+**Características:**
+• Produto de teste
+• Preço: R$ 2,99
+• Ideal para testar o fluxo completo de pagamento
+
+**Observação:**
+Este é um produto de teste criado para validação do sistema.`,
+    reviews: [] as ProductReview[],
+  },
 ];
