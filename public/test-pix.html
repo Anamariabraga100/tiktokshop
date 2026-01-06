@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste PIX - Order Number</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .container {
+            max-width: 600px;
+            width: 100%;
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+            text-align: center;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+            text-align: center;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+            font-size: 14px;
+        }
+        
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        button {
+            width: 100%;
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 14px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s;
+            margin-bottom: 10px;
+        }
+        
+        button:hover {
+            background: #5568d3;
+        }
+        
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        button.secondary {
+            background: #6c757d;
+        }
+        
+        button.secondary:hover {
+            background: #5a6268;
+        }
+        
+        button.success {
+            background: #28a745;
+        }
+        
+        button.success:hover {
+            background: #218838;
+        }
+        
+        .result {
+            margin-top: 20px;
+            padding: 20px;
+            border-radius: 8px;
+            display: none;
+        }
+        
+        .result.success {
+            background: #d4edda;
+            border: 2px solid #28a745;
+            color: #155724;
+            display: block;
+        }
+        
+        .result.error {
+            background: #f8d7da;
+            border: 2px solid #dc3545;
+            color: #721c24;
+            display: block;
+        }
+        
+        .result.info {
+            background: #d1ecf1;
+            border: 2px solid #17a2b8;
+            color: #0c5460;
+            display: block;
+        }
+        
+        .result h3 {
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+        
+        .result pre {
+            background: rgba(0, 0, 0, 0.05);
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-top: 10px;
+        }
+        
+        .status-badge.pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .status-badge.paid {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status-badge.expired {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #667eea;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Teste PIX</h1>
+        <p class="subtitle">Digite o Order Number para verificar o status</p>
+        
+        <div class="form-group">
+            <label for="orderNumber">Order Number</label>
+            <input 
+                type="text" 
+                id="orderNumber" 
+                placeholder="Ex: ORDER-1234567890-ABC123"
+                autocomplete="off"
+            >
+        </div>
+        
+        <button onclick="checkStatus()" id="checkBtn">🔍 Verificar Status</button>
+        <button onclick="updateToPaid()" id="updateBtn" class="success">✅ Marcar como Pago</button>
+        <button onclick="clearResult()" class="secondary">🗑️ Limpar</button>
+        
+        <div id="result" class="result"></div>
+    </div>
+    
+    <script>
+        const API_URL = window.location.origin + '/api';
+        
+        function showResult(message, type = 'info', data = null) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.className = `result ${type}`;
+            
+            let content = `<h3>${message}</h3>`;
+            
+            if (data) {
+                content += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+            }
+            
+            resultDiv.innerHTML = content;
+            resultDiv.style.display = 'block';
+        }
+        
+        function clearResult() {
+            document.getElementById('result').style.display = 'none';
+            document.getElementById('orderNumber').value = '';
+        }
+        
+        async function checkStatus() {
+            const orderNumber = document.getElementById('orderNumber').value.trim();
+            
+            if (!orderNumber) {
+                showResult('❌ Por favor, digite o Order Number', 'error');
+                return;
+            }
+            
+            const btn = document.getElementById('checkBtn');
+            btn.disabled = true;
+            btn.textContent = '⏳ Verificando...';
+            
+            try {
+                showResult('⏳ Verificando status...', 'info');
+                
+                const response = await fetch(`${API_URL}/pix?orderId=${encodeURIComponent(orderNumber)}`);
+                const result = await response.json();
+                
+                if (!response.ok) {
+                    showResult(
+                        `❌ Erro: ${result.error || 'Erro ao verificar status'}`,
+                        'error',
+                        result
+                    );
+                    return;
+                }
+                
+                if (result.success) {
+                    let statusBadge = '';
+                    let statusText = '';
+                    
+                    if (result.isPaid) {
+                        statusBadge = '<span class="status-badge paid">✅ PAGO</span>';
+                        statusText = 'Pagamento confirmado!';
+                    } else if (result.isExpired) {
+                        statusBadge = '<span class="status-badge expired">⏰ EXPIRADO</span>';
+                        statusText = 'PIX expirado';
+                    } else {
+                        statusBadge = '<span class="status-badge pending">⏳ AGUARDANDO</span>';
+                        statusText = 'Aguardando pagamento';
+                    }
+                    
+                    showResult(
+                        `${statusText} ${statusBadge}`,
+                        result.isPaid ? 'success' : result.isExpired ? 'error' : 'info',
+                        {
+                            orderId: result.orderId || orderNumber,
+                            status: result.status,
+                            isPaid: result.isPaid,
+                            isExpired: result.isExpired,
+                            paidAt: result.paidAt || null,
+                            expiresAt: result.expiresAt || null
+                        }
+                    );
+                } else {
+                    showResult(
+                        `❌ Erro: ${result.error || 'Erro desconhecido'}`,
+                        'error',
+                        result
+                    );
+                }
+            } catch (error) {
+                showResult(
+                    `❌ Erro ao verificar: ${error.message}`,
+                    'error',
+                    { error: error.message }
+                );
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🔍 Verificar Status';
+            }
+        }
+        
+        async function updateToPaid() {
+            const orderNumber = document.getElementById('orderNumber').value.trim();
+            
+            if (!orderNumber) {
+                showResult('❌ Por favor, digite o Order Number', 'error');
+                return;
+            }
+            
+            if (!confirm(`Tem certeza que deseja marcar o pedido ${orderNumber} como PAGO?`)) {
+                return;
+            }
+            
+            const btn = document.getElementById('updateBtn');
+            btn.disabled = true;
+            btn.textContent = '⏳ Atualizando...';
+            
+            try {
+                showResult('⏳ Atualizando status para PAGO...', 'info');
+                
+                // Chamar endpoint de atualização (se existir) ou webhook manual
+                const response = await fetch(`${API_URL}/pix`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        orderId: orderNumber,
+                        status: 'paid'
+                    })
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    showResult(
+                        '✅ Status atualizado para PAGO!',
+                        'success',
+                        result
+                    );
+                } else {
+                    const result = await response.json();
+                    showResult(
+                        `❌ Erro ao atualizar: ${result.error || 'Erro desconhecido'}`,
+                        'error',
+                        result
+                    );
+                }
+            } catch (error) {
+                showResult(
+                    `⚠️ Endpoint de atualização não disponível. Use o webhook manual ou atualize diretamente no banco.`,
+                    'info',
+                    { error: error.message }
+                );
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '✅ Marcar como Pago';
+            }
+        }
+        
+        // Permitir Enter no input
+        document.getElementById('orderNumber').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                checkStatus();
+            }
+        });
+    </script>
+</body>
+</html>
+
