@@ -116,27 +116,99 @@ async function createTransaction(req, res) {
       }
     }
 
+    // ✅ Validar CPF antes de criar customer
+    if (normalizedCPF.length !== 11) {
+      return res.status(400).json({
+        success: false,
+        error: 'CPF inválido. Deve conter 11 dígitos.'
+      });
+    }
+
+    // ✅ Validar email (se fornecido)
+    const customerEmail = customer.email || `cliente${normalizedCPF.substring(0, 6)}@exemplo.com`;
+    if (customerEmail && !customerEmail.includes('@')) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email inválido.'
+      });
+    }
+
+    // ✅ Validar telefone (deve ter pelo menos 10 dígitos)
+    if (phone.length < 10) {
+      return res.status(400).json({
+        success: false,
+        error: 'Telefone inválido. Deve conter pelo menos 10 dígitos.'
+      });
+    }
+
+    // ✅ Validar nome (não pode estar vazio)
+    if (!customer.name || customer.name.trim().length < 3) {
+      return res.status(400).json({
+        success: false,
+        error: 'Nome inválido. Deve conter pelo menos 3 caracteres.'
+      });
+    }
+
     const umbrellaCustomer = {
-      name: customer.name,
+      name: customer.name.trim(), // ✅ Remover espaços extras
       phone: phone,
-      email: customer.email || `cliente${normalizedCPF.substring(0, 6)}@exemplo.com`,
+      email: customerEmail,
       document: {
         type: 'CPF',
         number: normalizedCPF
       }
     };
 
+    // ✅ Validar e formatar itens
+    if (!items || items.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Lista de itens vazia.'
+      });
+    }
+
     const umbrellaItems = items
-      .filter(item => item.price > 0)
+      .filter(item => item.price > 0 && item.name && item.name.trim() !== '')
       .map(item => {
         const itemPrice = Number(Number(item.price).toFixed(2));
+        const quantity = Math.max(1, Math.floor(item.quantity || 1)); // Garantir quantidade mínima 1
+        
+        if (itemPrice <= 0) {
+          throw new Error(`Preço inválido para item: ${item.name}`);
+        }
+        
+        if (!item.name || item.name.trim() === '') {
+          throw new Error('Nome do item não pode estar vazio');
+        }
+        
         return {
-          title: item.name,
-          unitPrice: Math.round(itemPrice * 100),
-          quantity: item.quantity || 1,
+          title: item.name.trim(), // ✅ Remover espaços extras
+          unitPrice: Math.round(itemPrice * 100), // ✅ Converter para centavos
+          quantity: quantity,
           tangible: true
         };
       });
+
+    // ✅ Validar se sobrou algum item após filtragem
+    if (umbrellaItems.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Nenhum item válido encontrado. Verifique os preços e nomes dos produtos.'
+      });
+    }
+
+    // ✅ Validar se o total dos itens bate com o totalPrice
+    const itemsTotal = umbrellaItems.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
+    const totalDifference = Math.abs(itemsTotal - amountInCents);
+    
+    // Permitir diferença de até 1 centavo (arredondamento)
+    if (totalDifference > 1) {
+      console.warn('⚠️ Diferença entre total dos itens e totalPrice:', {
+        itemsTotal,
+        amountInCents,
+        difference: totalDifference
+      });
+    }
 
     // ✅ Construir URL do webhook corretamente (Vercel)
     // Prioridade: variável de ambiente > headers > fallback
@@ -172,10 +244,21 @@ async function createTransaction(req, res) {
       console.warn('⚠️ Configure VITE_POSTBACK_URL ou POSTBACK_URL nas variáveis de ambiente da Vercel');
     }
     
+    // ✅ Obter IP do cliente (obrigatório pelo gateway)
+    const clientIP = req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+                     req.headers['x-real-ip'] ||
+                     req.connection?.remoteAddress ||
+                     req.socket?.remoteAddress ||
+                     '127.0.0.1';
+
+    // ✅ Construir payload completo conforme documentação UmbrellaPag
     const payload = {
       amount: amountInCents,
       currency: 'BRL',
       paymentMethod: 'PIX',
+      installments: 1, // ✅ OBRIGATÓRIO: PIX sempre 1 parcela
+      traceable: true, // ✅ OBRIGATÓRIO: rastreamento habilitado
+      ip: clientIP, // ✅ OBRIGATÓRIO: IP do cliente
       customer: umbrellaCustomer,
       items: umbrellaItems,
       pix: {
@@ -189,6 +272,25 @@ async function createTransaction(req, res) {
         ...metadata
       })
     };
+
+    // ✅ Log do payload completo para debug
+    console.log('📋 Payload completo para gateway:', {
+      amount: payload.amount,
+      currency: payload.currency,
+      paymentMethod: payload.paymentMethod,
+      installments: payload.installments,
+      traceable: payload.traceable,
+      ip: payload.ip,
+      customer: {
+        name: payload.customer.name,
+        email: payload.customer.email,
+        phone: payload.customer.phone,
+        document: payload.customer.document
+      },
+      itemsCount: payload.items.length,
+      hasPostbackUrl: !!payload.postbackUrl,
+      metadata: payload.metadata
+    });
     
     // Avisar se postbackUrl não foi configurado
     if (!postbackUrl) {
@@ -235,12 +337,27 @@ async function createTransaction(req, res) {
     }
 
     if (!response.ok) {
-      console.error('❌ Erro na API UmbrellaPag:', { status: response.status, data });
+      console.error('❌ Erro na API UmbrellaPag:', { 
+        status: response.status, 
+        data,
+        refusedReason: data?.error?.refusedReason,
+        provider: data?.error?.provider
+      });
+      
+      // ✅ Extrair motivo específico da recusa
+      const refusedReason = data?.error?.refusedReason || data?.data?.refusedReason || 'Erro de validação nos dados fornecidos';
+      const provider = data?.error?.provider || data?.data?.provider || 'Desconhecido';
+      
       return res.status(response.status).json({
         success: false,
         status: response.status,
-        error: data?.message || data?.error || 'Erro ao criar transação PIX',
-        data: data
+        error: `Transação recusada pelo gateway: ${refusedReason}`,
+        details: {
+          provider,
+          refusedReason,
+          gatewayMessage: data?.message,
+          gatewayData: data?.data
+        }
       });
     }
 
