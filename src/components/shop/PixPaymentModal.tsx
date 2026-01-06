@@ -343,8 +343,58 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Criar transação PIX no UmbrellaPag quando o modal abrir
+  // ✅ CORREÇÃO CRÍTICA: Limpar TODOS os estados quando o modal fecha ou abre
   useEffect(() => {
+    if (!isOpen) {
+      // Modal fechado: limpar TUDO
+      console.log('🧹 Modal fechado - limpando todos os estados do PIX');
+      setPixCode('');
+      setUmbrellaTransaction(null);
+      setOrderId(null);
+      setIsExpired(false);
+      setIsPaid(false);
+      setStatusMessage('');
+      setIsPolling(false);
+      isPaidRef.current = false;
+      pixGeneratedAtRef.current = null;
+      setTimeRemaining(600);
+      setIsProcessing(false);
+      
+      // Limpar timers
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      if (pollingRef.current) {
+        clearTimeout(pollingRef.current);
+        pollingRef.current = null;
+      }
+    } else {
+      // Modal aberto: garantir que está limpo antes de criar novo
+      console.log('🔄 Modal aberto - garantindo estado limpo para novo pagamento');
+      setPixCode('');
+      setUmbrellaTransaction(null);
+      setOrderId(null);
+      setIsExpired(false);
+      setIsPaid(false);
+      setStatusMessage('');
+      setIsPolling(false);
+      isPaidRef.current = false;
+      pixGeneratedAtRef.current = null;
+      setTimeRemaining(600);
+      setIsProcessing(false);
+    }
+  }, [isOpen]);
+
+  // Criar transação PIX no UmbrellaPag quando o modal abrir
+  // ✅ CORREÇÃO: Remover pixCode das dependências e garantir que só cria quando modal está aberto E limpo
+  useEffect(() => {
+    // ✅ Só criar se:
+    // - Modal está aberto
+    // - Tem dados do cliente
+    // - Tem itens no carrinho
+    // - NÃO está processando
+    // - NÃO tem QR Code ainda (garantir que é novo)
     if (isOpen && customerData && items.length > 0 && !pixCode && !isProcessing) {
       const createTransaction = async () => {
         try {
@@ -404,13 +454,18 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
             hasAddress: !!customerData.address,
           });
           
+          // ✅ CORREÇÃO: Gerar orderId ÚNICO para cada novo pedido
+          // Usar timestamp + random para garantir unicidade
+          const newOrderId = `ORDER-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+          console.log('🆕 Gerando NOVO pedido com orderId:', newOrderId);
+          
           // Criar transação no UmbrellaPag
           const transaction = await createPixTransaction(
             customerData,
             items,
             finalPrice,
             {
-              orderId: Math.random().toString(36).substring(2, 10).toUpperCase(),
+              orderId: newOrderId,
               isFirstPurchase: isFirstPurchase(),
             }
           );
@@ -430,32 +485,46 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
             console.log('✅ OrderId armazenado para polling:', transaction.orderId);
           }
           
-          // Obter QR Code PIX (pode estar em diferentes campos)
-          const qrCode = transaction.qrCode || transaction.pix?.qrCode || transaction.pix?.qrCodeImage || '';
+          // ✅ CORREÇÃO CRÍTICA: Obter QR Code APENAS da resposta do backend
+          // O QR Code DEVE vir de response.pix.qrcode ou response.pixCode
+          // NUNCA reutilizar QR Code antigo
+          const qrCode = transaction.pix?.qrcode || 
+                        transaction.pix?.qrCode || 
+                        transaction.qrCode || 
+                        transaction.pixCode || 
+                        '';
           
-          if (qrCode) {
-            setPixCode(qrCode);
-            pixGeneratedAtRef.current = Date.now(); // Marcar quando PIX foi gerado
-            console.log('✅ QR Code obtido com sucesso', {
-              timestamp: new Date(pixGeneratedAtRef.current).toISOString(),
-              orderId: transaction.orderId
-            });
-            
-            // Disparar evento pix_gerado
-            trackPixGerado(finalPrice, transaction.id);
-          } else {
-            // Tentar obter o QR Code da URL segura ou outros campos
-            if (transaction.secureUrl) {
-              console.warn('⚠️ QR Code não encontrado diretamente, mas há secureUrl:', transaction.secureUrl);
-              // Se tiver secureUrl, pode ser necessário acessar via webhook
-            }
-            
-            toast.error('QR Code PIX não foi gerado pela API. Verifique o console para mais detalhes.');
-            console.error('❌ Transação criada, mas sem QR Code:', {
+          if (!qrCode || qrCode.trim() === '') {
+            // ❌ CRÍTICO: Se não tiver QR Code, não pode continuar
+            console.error('❌❌❌ ERRO CRÍTICO: QR Code não recebido do backend!', {
               transaction,
               availableFields: Object.keys(transaction),
+              pixFields: transaction.pix ? Object.keys(transaction.pix) : 'sem pix',
             });
+            toast.error('Erro: QR Code não foi gerado. Tente novamente.', {
+              duration: 8000,
+              id: 'pix-qr-error',
+            });
+            setPixCode('');
+            setUmbrellaTransaction(null);
+            setOrderId(null);
+            setIsProcessing(false);
+            return; // ⚠️ PARAR AQUI - não continuar sem QR Code válido
           }
+          
+          // ✅ Só definir QR Code se for válido e novo
+          console.log('✅✅✅ QR Code recebido do backend (NOVO):', {
+            timestamp: new Date().toISOString(),
+            orderId: transaction.orderId,
+            qrCodeLength: qrCode.length,
+            qrCodePreview: qrCode.substring(0, 50) + '...',
+          });
+          
+          setPixCode(qrCode);
+          pixGeneratedAtRef.current = Date.now(); // Marcar quando PIX foi gerado
+          
+          // Disparar evento pix_gerado
+          trackPixGerado(finalPrice, transaction.id);
         } catch (error: any) {
           console.error('❌ Erro ao criar transação PIX:', error);
           
@@ -482,7 +551,10 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
       
       createTransaction();
     }
-  }, [isOpen, customerData, items, finalPrice, isFirstPurchase, pixCode, isProcessing]);
+    // ✅ CORREÇÃO: Remover pixCode das dependências para evitar loop
+    // O pixCode será definido DEPOIS de receber a resposta do backend
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, customerData, items, finalPrice, isFirstPurchase]);
 
   // Gerar novo PIX
   const handleGenerateNewPix = async () => {
@@ -492,40 +564,80 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
       pollingRef.current = null;
     }
     
+    // ✅ CORREÇÃO: Limpar TUDO antes de gerar novo PIX
+    console.log('🔄 Gerando novo PIX - limpando estado anterior');
     setPixCode('');
     setUmbrellaTransaction(null);
-    setOrderId(null); // Resetar orderId
+    setOrderId(null);
     setIsExpired(false);
     setIsPaid(false);
-    setStatusMessage(''); // Resetar mensagem
-    setIsPolling(false); // Resetar polling
-    isPaidRef.current = false; // Resetar ref
-    pixGeneratedAtRef.current = null; // Resetar timestamp
+    setStatusMessage('');
+    setIsPolling(false);
+    isPaidRef.current = false;
+    pixGeneratedAtRef.current = null;
     setTimeRemaining(600);
     setIsProcessing(false);
+    
+    // Limpar timers
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    if (pollingRef.current) {
+      clearTimeout(pollingRef.current);
+      pollingRef.current = null;
+    }
     
     // Forçar recriação da transação
     const createTransaction = async () => {
       try {
         setIsProcessing(true);
         
+        // ✅ CORREÇÃO: Gerar orderId ÚNICO para cada novo pedido
+        const newOrderId = `ORDER-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+        console.log('🆕 Gerando NOVO pedido (regenerar PIX) com orderId:', newOrderId);
+        
         const transaction = await createPixTransaction(
           customerData!,
           items,
           finalPrice,
           {
-            orderId: Math.random().toString(36).substring(2, 10).toUpperCase(),
+            orderId: newOrderId,
             isFirstPurchase: isFirstPurchase(),
           }
         );
         
         setUmbrellaTransaction(transaction);
-        const qrCode = transaction.qrCode || transaction.pix?.qrCode || transaction.pix?.qrCodeImage || '';
         
-        if (qrCode) {
-          setPixCode(qrCode);
-          trackPixGerado(finalPrice, transaction.id);
+        // ✅ CORREÇÃO: Obter QR Code APENAS da resposta do backend
+        const qrCode = transaction.pix?.qrcode || 
+                      transaction.pix?.qrCode || 
+                      transaction.qrCode || 
+                      transaction.pixCode || 
+                      '';
+        
+        if (!qrCode || qrCode.trim() === '') {
+          console.error('❌❌❌ ERRO: QR Code não recebido ao gerar novo PIX!');
+          toast.error('Erro: QR Code não foi gerado. Tente novamente.');
+          setIsProcessing(false);
+          return;
         }
+        
+        console.log('✅✅✅ Novo QR Code recebido:', {
+          timestamp: new Date().toISOString(),
+          orderId: transaction.orderId,
+          qrCodeLength: qrCode.length,
+        });
+        
+        setPixCode(qrCode);
+        pixGeneratedAtRef.current = Date.now();
+        
+        // Armazenar orderId para polling
+        if (transaction.orderId) {
+          setOrderId(transaction.orderId);
+        }
+        
+        trackPixGerado(finalPrice, transaction.id);
       } catch (error: any) {
         console.error('❌ Erro ao gerar novo PIX:', error);
         toast.error('Erro ao gerar novo código PIX. Tente novamente.');

@@ -348,21 +348,47 @@ export const createPixTransaction = async (
     throw new Error(errorMessage);
   }
 
-  // Verificar se tem QR Code na resposta (pode estar em diferentes campos)
-  const qrCode = result.pixCode || result.data?.pix?.qrCode || result.data?.qrCode;
-  if (qrCode) {
-    // Adicionar QR Code aos dados se não estiver lá
-    if (!result.data.qrCode && !result.data.pix?.qrCode) {
-      result.data.qrCode = qrCode;
-      if (!result.data.pix) {
-        result.data.pix = {};
-      }
-      result.data.pix.qrCode = qrCode;
-    }
-  } else {
-    console.warn('⚠️ Transação criada, mas sem QR Code:', result.data);
-    // Não lançar erro, apenas avisar - o QR Code pode ser gerado depois
+  // ✅ CORREÇÃO CRÍTICA: Obter QR Code APENAS da resposta do backend
+  // O QR Code DEVE vir de response.pixCode ou result.data.pix.qrcode
+  // NUNCA reutilizar QR Code antigo
+  const qrCode = result.pixCode || 
+                 result.data?.pix?.qrcode || 
+                 result.data?.pix?.qrCode || 
+                 result.data?.qrCode || 
+                 '';
+  
+  if (!qrCode || qrCode.trim() === '') {
+    console.error('❌❌❌ ERRO CRÍTICO: QR Code não recebido do backend!', {
+      result,
+      hasPixCode: !!result.pixCode,
+      hasData: !!result.data,
+      hasPix: !!result.data?.pix,
+      availableFields: result.data ? Object.keys(result.data) : [],
+    });
+    throw new Error('QR Code não foi gerado pelo gateway. Tente novamente.');
   }
+  
+  // ✅ Garantir que o QR Code está em todos os lugares esperados no objeto de retorno
+  if (!result.data.qrCode) {
+    result.data.qrCode = qrCode;
+  }
+  if (!result.data.pix) {
+    result.data.pix = {};
+  }
+  if (!result.data.pix.qrCode) {
+    result.data.pix.qrCode = qrCode;
+  }
+  if (!result.data.pix.qrcode) {
+    result.data.pix.qrcode = qrCode;
+  }
+  
+  // ✅ Log para confirmar que o QR Code foi obtido corretamente
+  console.log('✅✅✅ QR Code obtido do backend (NOVO):', {
+    timestamp: new Date().toISOString(),
+    orderId: result.data?.orderId,
+    qrCodeLength: qrCode.length,
+    qrCodePreview: qrCode.substring(0, 50) + '...',
+  });
 
   return result.data;
 };
