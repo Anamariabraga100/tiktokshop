@@ -238,7 +238,7 @@ export default async function handler(req, res) {
       // Atualizar pedido mesmo se não for PAID (pode ser mudança de status)
       if (supabase) {
         try {
-          await supabase
+          const updateResult = await supabase
             .from('orders')
             .update({
               umbrella_status: status,
@@ -247,9 +247,15 @@ export default async function handler(req, res) {
               status: status === 'paid' || status === 'PAID' ? 'pago' : 'aguardando_pagamento',
               updated_at: new Date().toISOString()
             })
-            .eq('order_number', orderId);
+            .eq('order_number', orderId)
+            .select()
+            .single();
 
-          console.log(`💰 Pedido ${orderId} atualizado via webhook (status: ${status})`);
+          if (updateResult.error) {
+            console.error('❌ Erro ao atualizar pedido:', updateResult.error);
+          } else {
+            console.log(`💰 Pedido ${orderId} atualizado via webhook (status: ${status} → ${updateResult.data?.status || 'N/A'})`);
+          }
         } catch (dbError) {
           console.error('❌ Erro ao atualizar pedido:', dbError);
         }
