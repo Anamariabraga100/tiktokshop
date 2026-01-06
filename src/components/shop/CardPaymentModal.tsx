@@ -31,11 +31,8 @@ export const CardPaymentModal = ({ isOpen, onClose }: CardPaymentModalProps) => 
   // Calcular valor final (MESMA LÓGICA DO CARTDRAWER)
   const safeTotalPrice = totalPrice || 0;
   
-  // Verificar frete grátis (mesma lógica do CartDrawer)
-  const freeShippingThreshold = 50;
-  const freeShippingFromThankYou = localStorage.getItem('freeShippingFromThankYou') === 'true' && safeTotalPrice >= freeShippingThreshold;
-  // ✅ Frete grátis APENAS para pedidos acima de R$ 50
-  const hasFreeShippingCalculated = safeTotalPrice >= freeShippingThreshold || freeShippingFromThankYou;
+  // ✅ Frete sempre grátis (sem pedido mínimo)
+  const hasFreeShippingCalculated = true;
   
   // Outros cupons percentuais são aplicados se ativos
   const applicableCoupon = getApplicableCoupon(safeTotalPrice);
@@ -50,19 +47,8 @@ export const CardPaymentModal = ({ isOpen, onClose }: CardPaymentModalProps) => 
   // Cartão NÃO tem desconto adicional (diferente do PIX)
   const priceAfterCard = priceAfterCoupon;
   
-  // Calcular frete (usar o mesmo valor do CartDrawer)
-  const shippingPrice = useMemo(() => {
-    // ✅ Mostrar frete apenas depois de preencher informações de entrega
-    if (!hasAddress) {
-      return 0; // Não incluir no cálculo até preencher endereço
-    }
-    // Se tem frete grátis, sempre usar 0
-    if (hasFreeShippingCalculated) {
-      return 0;
-    }
-    // Frete fixo de R$ 7,90
-    return 7.90;
-  }, [hasFreeShippingCalculated, hasAddress]);
+  // ✅ Frete sempre grátis (sem pedido mínimo)
+  const shippingPrice = 0;
   
   // Valor final incluindo frete (IMPORTANTE: deve incluir frete como no CartDrawer)
   const finalPrice = priceAfterCard + shippingPrice;

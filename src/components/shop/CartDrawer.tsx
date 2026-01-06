@@ -41,13 +41,14 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
   const [showCardModal, setShowCardModal] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'pix' | 'card'>('pix');
 
-  const freeShippingThreshold = 50;
-  const missingForFreeShipping = Math.max(0, freeShippingThreshold - totalPrice);
-  const freeShippingProgress = Math.min(100, (totalPrice / freeShippingThreshold) * 100);
-  // Verificar se tem frete grátis da página de agradecimento (apenas se total >= 50)
-  const freeShippingFromThankYou = localStorage.getItem('freeShippingFromThankYou') === 'true' && totalPrice >= freeShippingThreshold;
-  // ✅ Frete grátis APENAS para pedidos acima de R$ 50
-  const hasFreeShipping = totalPrice >= freeShippingThreshold || freeShippingFromThankYou;
+  // ✅ Frete sempre grátis (sem pedido mínimo)
+  const hasFreeShipping = true;
+  
+  // ✅ Brinde com threshold de R$ 50
+  const giftThreshold = 50;
+  const missingForGift = Math.max(0, giftThreshold - totalPrice);
+  const giftProgress = Math.min(100, (totalPrice / giftThreshold) * 100);
+  const hasGift = totalPrice >= giftThreshold;
 
   // Outros cupons percentuais são aplicados se ativos
   const applicableCoupon = getApplicableCoupon(totalPrice);
@@ -128,20 +129,9 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
     const monthName = maxDate.toLocaleDateString('pt-BR', { month: 'long' });
     const month = monthName.charAt(0).toUpperCase() + monthName.slice(1);
     
-    // Calcular frete baseado no total atual
-    let price: number;
-    
-    // ✅ Se tem frete grátis (total >= 50), sempre usar 0
-    if (hasFreeShipping) {
-      price = 0;
-      localStorage.setItem('currentShippingPrice', '0');
-    } else {
-      // Se total < 50, sempre usar 7.90
-      price = 7.90;
-      if (hasAddress) {
-        localStorage.setItem('currentShippingPrice', price.toString());
-      }
-    }
+    // ✅ Frete sempre grátis (sem pedido mínimo)
+    const price = 0;
+    localStorage.setItem('currentShippingPrice', '0');
     
     const formatted = price.toFixed(2).replace('.', ',');
     
@@ -150,7 +140,7 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
       shippingPrice: price,
       formattedShippingPrice: formatted
     };
-  }, [hasAddress, totalPrice, freeShippingThreshold, hasFreeShipping]);
+  }, [hasAddress, totalPrice, hasFreeShipping]);
 
   // Calcular preço final incluindo frete
   const finalPrice = priceAfterPix + shippingPrice;
@@ -397,30 +387,42 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                       )}
                     </div>
 
-                    {/* Free Shipping Progress */}
-                    {!hasFreeShipping && (
+                    {/* Gift Progress */}
+                    {!hasGift && (
                       <div className="bg-card rounded-lg border border-border p-3">
                         <div className="flex items-center gap-2 mb-2">
                           <Truck className="w-4 h-4 text-muted-foreground" />
                           <span className="text-xs font-semibold">
-                            Falta R$ {missingForFreeShipping.toFixed(2).replace('.', ',')} para frete grátis!
+                            Falta R$ {missingForGift.toFixed(2).replace('.', ',')} para ganhar o brinde!
                           </span>
                         </div>
                         <div className="relative h-2.5 w-full overflow-hidden rounded-full bg-muted">
                           <div 
                             className="h-full bg-gradient-to-r from-success to-success/80 transition-all duration-500 rounded-full flex items-center justify-center"
-                            style={{ width: `${freeShippingProgress}%` }}
+                            style={{ width: `${giftProgress}%` }}
                           >
-                            {freeShippingProgress > 20 && (
+                            {giftProgress > 20 && (
                               <span className="text-[9px] font-bold text-white">
-                                {Math.round(freeShippingProgress)}%
+                                {Math.round(giftProgress)}%
                               </span>
                             )}
                           </div>
                         </div>
                         <div className="flex justify-between items-center mt-1.5">
                           <span className="text-[10px] text-muted-foreground">R$ 0</span>
-                          <span className="text-[10px] text-muted-foreground">R$ {freeShippingThreshold.toFixed(2).replace('.', ',')}</span>
+                          <span className="text-[10px] text-muted-foreground">R$ {giftThreshold.toFixed(2).replace('.', ',')}</span>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Gift Achieved */}
+                    {hasGift && (
+                      <div className="bg-success/10 rounded-lg border border-success/20 p-3">
+                        <div className="flex items-center gap-2">
+                          <Truck className="w-4 h-4 text-success" />
+                          <span className="text-xs font-semibold text-success">
+                            🎁 Parabéns! Você ganhou o brinde!
+                          </span>
                         </div>
                       </div>
                     )}
@@ -430,7 +432,7 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                         <div className="flex items-center gap-2">
                           <CheckCircle2 className="w-5 h-5 text-success" />
                           <span className="text-sm font-semibold text-success">
-                            🎉 Parabéns! Você ganhou frete grátis!
+                            🎉 Parabéns! Você ganhou o brinde!
                           </span>
                         </div>
                       </div>
@@ -695,7 +697,7 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                       {!hasFreeShipping && missingForFreeShipping > 0 && (
                         <div className="mt-3 p-3 bg-success/10 rounded-lg border border-success/20">
                           <p className="text-sm font-medium text-success flex items-center gap-1">
-                            🎁 Compre mais R$ {missingForFreeShipping.toFixed(2).replace('.', ',')} e ganhe frete grátis + brinde!
+                            🎁 Compre mais R$ {missingForGift.toFixed(2).replace('.', ',')} e ganhe o brinde!
                           </p>
                         </div>
                       )}
