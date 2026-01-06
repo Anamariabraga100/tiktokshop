@@ -415,19 +415,8 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                       </div>
                     )}
                     
-                    {/* Gift Achieved */}
-                    {hasGift && (
-                      <div className="bg-success/10 rounded-lg border border-success/20 p-3">
-                        <div className="flex items-center gap-2">
-                          <Truck className="w-4 h-4 text-success" />
-                          <span className="text-xs font-semibold text-success">
-                            🎁 Parabéns! Você ganhou o brinde!
-                          </span>
-                        </div>
-                      </div>
-                    )}
-
-                    {hasFreeShipping && (
+                    {/* Mensagem de brinde - Só mostra quando bater R$ 50 */}
+                    {hasGift && totalPrice >= giftThreshold && (
                       <div className="bg-success/10 rounded-xl border border-success/20 p-4">
                         <div className="flex items-center gap-2">
                           <CheckCircle2 className="w-5 h-5 text-success" />

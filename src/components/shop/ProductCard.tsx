@@ -158,7 +158,7 @@ export const ProductCard = memo(({ product, onClick, index = 0 }: ProductCardPro
           {product.freeShipping && (
             <span className="text-success text-[10px] font-medium flex items-center gap-0.5">
               <Truck className="w-3 h-3" />
-              Frete grátis +R$50
+              Frete grátis
             </span>
           )}
         </div>

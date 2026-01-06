@@ -512,7 +512,7 @@ export const ProductDrawer = memo(({ product, isOpen, onClose, onBuyNow, onProdu
                   <div className="flex items-center gap-1">
                     <span className="text-success text-sm md:text-base font-medium flex items-center gap-1">
                       <Truck className="w-4 h-4" />
-                      Frete grátis acima de R$50
+                      Frete grátis
                     </span>
                   </div>
                 )}
