@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste Fluxo Completo PIX</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 12px;
+        }
+        
+        .section h2 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 20px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #333;
+            font-weight: 500;
+            font-size: 14px;
+        }
+        
+        input, select, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        
+        button:hover {
+            background: #5568d3;
+        }
+        
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        button.secondary {
+            background: #6c757d;
+        }
+        
+        button.secondary:hover {
+            background: #5a6268;
+        }
+        
+        button.success {
+            background: #28a745;
+        }
+        
+        button.success:hover {
+            background: #218838;
+        }
+        
+        button.danger {
+            background: #dc3545;
+        }
+        
+        button.danger:hover {
+            background: #c82333;
+        }
+        
+        .items-list {
+            margin-top: 15px;
+        }
+        
+        .item {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: 2px solid #e0e0e0;
+        }
+        
+        .item-info {
+            flex: 1;
+        }
+        
+        .item-name {
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .item-price {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .item-actions {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .logs {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+            margin-top: 15px;
+        }
+        
+        .log-entry {
+            margin-bottom: 8px;
+            padding: 5px;
+            border-left: 3px solid transparent;
+        }
+        
+        .log-entry.success {
+            border-left-color: #28a745;
+            color: #90ee90;
+        }
+        
+        .log-entry.error {
+            border-left-color: #dc3545;
+            color: #ff6b6b;
+        }
+        
+        .log-entry.warning {
+            border-left-color: #ffc107;
+            color: #ffd700;
+        }
+        
+        .log-entry.info {
+            border-left-color: #17a2b8;
+            color: #87ceeb;
+        }
+        
+        .qr-code-container {
+            text-align: center;
+            margin-top: 20px;
+            padding: 20px;
+            background: white;
+            border-radius: 12px;
+            border: 2px solid #e0e0e0;
+        }
+        
+        .qr-code-container img {
+            max-width: 300px;
+            margin: 20px auto;
+            display: block;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+        }
+        
+        .qr-code-text {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            word-break: break-all;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .status {
+            padding: 10px;
+            border-radius: 8px;
+            margin-top: 15px;
+            font-weight: 600;
+        }
+        
+        .status.pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .status.paid {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status.expired {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Teste Fluxo Completo PIX</h1>
+        <p class="subtitle">Teste completo de criação, exibição e verificação de status do PIX</p>
+        
+        <div class="section">
+            <h2>1️⃣ Dados do Cliente</h2>
+            <div class="form-group">
+                <label>Nome Completo *</label>
+                <input type="text" id="customerName" value="João Silva" required>
+            </div>
+            <div class="form-group">
+                <label>CPF *</label>
+                <input type="text" id="customerCPF" value="12345678900" required>
+            </div>
+            <div class="form-group">
+                <label>Email</label>
+                <input type="email" id="customerEmail" value="joao@teste.com">
+            </div>
+            <div class="form-group">
+                <label>Telefone</label>
+                <input type="text" id="customerPhone" value="11999999999">
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>2️⃣ Endereço de Entrega</h2>
+            <div class="grid">
+                <div class="form-group">
+                    <label>CEP *</label>
+                    <input type="text" id="addressCEP" value="01234567" required>
+                </div>
+                <div class="form-group">
+                    <label>Estado *</label>
+                    <input type="text" id="addressEstado" value="SP" required>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Cidade *</label>
+                <input type="text" id="addressCidade" value="São Paulo" required>
+            </div>
+            <div class="form-group">
+                <label>Bairro *</label>
+                <input type="text" id="addressBairro" value="Centro" required>
+            </div>
+            <div class="form-group">
+                <label>Rua *</label>
+                <input type="text" id="addressRua" value="Rua Teste" required>
+            </div>
+            <div class="form-group">
+                <label>Número *</label>
+                <input type="text" id="addressNumero" value="123" required>
+            </div>
+            <div class="form-group">
+                <label>Complemento</label>
+                <input type="text" id="addressComplemento" value="">
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>3️⃣ Itens do Pedido</h2>
+            <div class="form-group">
+                <label>Nome do Produto</label>
+                <input type="text" id="itemName" value="Produto Teste">
+            </div>
+            <div class="grid">
+                <div class="form-group">
+                    <label>Preço (R$)</label>
+                    <input type="number" id="itemPrice" value="2.99" step="0.01" min="0.01">
+                </div>
+                <div class="form-group">
+                    <label>Quantidade</label>
+                    <input type="number" id="itemQuantity" value="1" min="1">
+                </div>
+            </div>
+            <button onclick="addItem()">➕ Adicionar Item</button>
+            <div class="items-list" id="itemsList"></div>
+        </div>
+        
+        <div class="section">
+            <h2>4️⃣ Criar PIX</h2>
+            <div class="form-group">
+                <label>Total do Pedido (R$)</label>
+                <input type="number" id="totalPrice" value="2.99" step="0.01" min="0.01" readonly>
+            </div>
+            <button onclick="createPix()" id="createPixBtn" class="success">🚀 Criar PIX</button>
+            <button onclick="clearLogs()" class="secondary">🗑️ Limpar Logs</button>
+        </div>
+        
+        <div class="section" id="pixResult" style="display: none;">
+            <h2>5️⃣ Resultado do PIX</h2>
+            <div id="pixStatus" class="status pending">Aguardando criação...</div>
+            <div id="pixInfo" style="margin-top: 15px;"></div>
+            <div class="qr-code-container" id="qrCodeContainer" style="display: none;">
+                <h3>QR Code PIX</h3>
+                <img id="qrCodeImage" alt="QR Code PIX">
+                <div class="qr-code-text" id="qrCodeText"></div>
+                <button onclick="copyQRCode()" class="secondary" style="margin-top: 15px;">📋 Copiar Código PIX</button>
+            </div>
+            <div style="margin-top: 20px;">
+                <button onclick="startPolling()" id="pollingBtn" class="success" style="display: none;">🔄 Iniciar Polling</button>
+                <button onclick="stopPolling()" id="stopPollingBtn" class="danger" style="display: none;">⏹️ Parar Polling</button>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>6️⃣ Logs do Sistema</h2>
+            <div class="logs" id="logs"></div>
+        </div>
+    </div>
+    
+    <script>
+        const API_URL = window.location.origin + '/api';
+        let items = [];
+        let currentOrderId = null;
+        let pollingInterval = null;
+        
+        function addLog(message, type = 'info') {
+            const logs = document.getElementById('logs');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            const timestamp = new Date().toLocaleTimeString();
+            entry.textContent = `[${timestamp}] ${message}`;
+            logs.appendChild(entry);
+            logs.scrollTop = logs.scrollHeight;
+            console.log(`[${type.toUpperCase()}] ${message}`);
+        }
+        
+        function clearLogs() {
+            document.getElementById('logs').innerHTML = '';
+            addLog('Logs limpos', 'info');
+        }
+        
+        function addItem() {
+            const name = document.getElementById('itemName').value;
+            const price = parseFloat(document.getElementById('itemPrice').value);
+            const quantity = parseInt(document.getElementById('itemQuantity').value);
+            
+            if (!name || !price || !quantity) {
+                addLog('Preencha todos os campos do item', 'error');
+                return;
+            }
+            
+            items.push({ name, price, quantity });
+            updateItemsList();
+            updateTotal();
+            
+            document.getElementById('itemName').value = '';
+            document.getElementById('itemPrice').value = '2.99';
+            document.getElementById('itemQuantity').value = '1';
+            
+            addLog(`Item adicionado: ${name} - R$ ${price.toFixed(2)} x ${quantity}`, 'success');
+        }
+        
+        function removeItem(index) {
+            items.splice(index, 1);
+            updateItemsList();
+            updateTotal();
+            addLog('Item removido', 'info');
+        }
+        
+        function updateItemsList() {
+            const list = document.getElementById('itemsList');
+            list.innerHTML = '';
+            
+            if (items.length === 0) {
+                list.innerHTML = '<p style="color: #666; font-style: italic;">Nenhum item adicionado</p>';
+                return;
+            }
+            
+            items.forEach((item, index) => {
+                const div = document.createElement('div');
+                div.className = 'item';
+                div.innerHTML = `
+                    <div class="item-info">
+                        <div class="item-name">${item.name}</div>
+                        <div class="item-price">R$ ${item.price.toFixed(2)} x ${item.quantity} = R$ ${(item.price * item.quantity).toFixed(2)}</div>
+                    </div>
+                    <div class="item-actions">
+                        <button onclick="removeItem(${index})" class="danger" style="padding: 5px 10px; font-size: 12px;">Remover</button>
+                    </div>
+                `;
+                list.appendChild(div);
+            });
+        }
+        
+        function updateTotal() {
+            const total = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+            document.getElementById('totalPrice').value = total.toFixed(2);
+        }
+        
+        async function createPix() {
+            try {
+                addLog('🚨🚨🚨 INICIANDO CRIAÇÃO DO PIX...', 'info');
+                
+                // Validar dados
+                const customerName = document.getElementById('customerName').value;
+                const customerCPF = document.getElementById('customerCPF').value;
+                
+                if (!customerName || !customerCPF) {
+                    addLog('Preencha nome e CPF do cliente', 'error');
+                    return;
+                }
+                
+                if (items.length === 0) {
+                    addLog('Adicione pelo menos um item ao pedido', 'error');
+                    return;
+                }
+                
+                // Preparar dados do cliente
+                const customer = {
+                    name: customerName,
+                    cpf: customerCPF.replace(/\D/g, ''),
+                    email: document.getElementById('customerEmail').value || '',
+                    phone: document.getElementById('customerPhone').value.replace(/\D/g, '') || '',
+                    address: {
+                        cep: document.getElementById('addressCEP').value.replace(/\D/g, ''),
+                        estado: document.getElementById('addressEstado').value,
+                        cidade: document.getElementById('addressCidade').value,
+                        bairro: document.getElementById('addressBairro').value,
+                        rua: document.getElementById('addressRua').value,
+                        numero: document.getElementById('addressNumero').value,
+                        complemento: document.getElementById('addressComplemento').value || '',
+                    }
+                };
+                
+                const totalPrice = parseFloat(document.getElementById('totalPrice').value);
+                const orderId = `TEST-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+                
+                const payload = {
+                    customer,
+                    items,
+                    totalPrice,
+                    metadata: {
+                        orderId,
+                        test: true
+                    }
+                };
+                
+                addLog(`📤 Enviando POST ${API_URL}/pix`, 'info');
+                addLog(`Payload: ${JSON.stringify(payload, null, 2)}`, 'info');
+                
+                document.getElementById('createPixBtn').disabled = true;
+                document.getElementById('pixResult').style.display = 'block';
+                document.getElementById('pixStatus').className = 'status pending';
+                document.getElementById('pixStatus').textContent = 'Criando PIX...';
+                
+                const startTime = Date.now();
+                const response = await fetch(`${API_URL}/pix`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(payload)
+                });
+                
+                const endTime = Date.now();
+                const duration = endTime - startTime;
+                
+                addLog(`📥 Resposta recebida em ${duration}ms - Status: ${response.status}`, response.ok ? 'success' : 'error');
+                
+                const responseText = await response.text();
+                addLog(`📥 Resposta raw: ${responseText.substring(0, 500)}...`, 'info');
+                
+                let result;
+                try {
+                    result = JSON.parse(responseText);
+                } catch (e) {
+                    addLog(`❌ Erro ao parsear JSON: ${e.message}`, 'error');
+                    addLog(`Resposta completa: ${responseText}`, 'error');
+                    return;
+                }
+                
+                if (!response.ok) {
+                    addLog(`❌ Erro na resposta: ${result.error || result.message || 'Erro desconhecido'}`, 'error');
+                    document.getElementById('pixStatus').className = 'status expired';
+                    document.getElementById('pixStatus').textContent = `Erro: ${result.error || result.message}`;
+                    return;
+                }
+                
+                if (!result.success) {
+                    addLog(`❌ Resposta não indica sucesso: ${result.error || result.message}`, 'error');
+                    document.getElementById('pixStatus').className = 'status expired';
+                    document.getElementById('pixStatus').textContent = `Erro: ${result.error || result.message}`;
+                    return;
+                }
+                
+                addLog(`✅✅✅ PIX CRIADO COM SUCESSO!`, 'success');
+                addLog(`OrderId: ${result.data?.orderId || result.data?.id}`, 'success');
+                addLog(`TransactionId: ${result.data?.transactionId || result.data?.id}`, 'success');
+                
+                const qrCode = result.pixCode || result.data?.pix?.qrcode || result.data?.pix?.qrCode || result.data?.qrCode || '';
+                
+                if (!qrCode) {
+                    addLog(`❌❌❌ ERRO CRÍTICO: QR Code não recebido!`, 'error');
+                    addLog(`Campos disponíveis: ${JSON.stringify(Object.keys(result))}`, 'error');
+                    document.getElementById('pixStatus').className = 'status expired';
+                    document.getElementById('pixStatus').textContent = 'Erro: QR Code não recebido';
+                    return;
+                }
+                
+                addLog(`✅ QR Code recebido (${qrCode.length} caracteres)`, 'success');
+                
+                currentOrderId = result.data?.orderId || result.data?.id;
+                
+                // Exibir informações
+                document.getElementById('pixInfo').innerHTML = `
+                    <p><strong>OrderId:</strong> ${currentOrderId}</p>
+                    <p><strong>TransactionId:</strong> ${result.data?.transactionId || result.data?.id || 'N/A'}</p>
+                    <p><strong>Status:</strong> ${result.data?.status || 'N/A'}</p>
+                    <p><strong>Valor:</strong> R$ ${totalPrice.toFixed(2)}</p>
+                `;
+                
+                // Exibir QR Code
+                document.getElementById('qrCodeContainer').style.display = 'block';
+                document.getElementById('qrCodeText').textContent = qrCode;
+                
+                // Gerar imagem do QR Code usando API externa
+                const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrCode)}`;
+                document.getElementById('qrCodeImage').src = qrImageUrl;
+                
+                document.getElementById('pixStatus').className = 'status pending';
+                document.getElementById('pixStatus').textContent = 'PIX criado - Aguardando pagamento';
+                document.getElementById('pollingBtn').style.display = 'inline-block';
+                
+                addLog(`✅✅✅ FLUXO COMPLETO: PIX criado e QR Code exibido!`, 'success');
+                
+            } catch (error) {
+                addLog(`❌ Erro ao criar PIX: ${error.message}`, 'error');
+                console.error('Erro completo:', error);
+                document.getElementById('pixStatus').className = 'status expired';
+                document.getElementById('pixStatus').textContent = `Erro: ${error.message}`;
+            } finally {
+                document.getElementById('createPixBtn').disabled = false;
+            }
+        }
+        
+        function copyQRCode() {
+            const qrCodeText = document.getElementById('qrCodeText').textContent;
+            navigator.clipboard.writeText(qrCodeText).then(() => {
+                addLog('✅ Código PIX copiado para a área de transferência', 'success');
+            }).catch(err => {
+                addLog(`❌ Erro ao copiar: ${err.message}`, 'error');
+            });
+        }
+        
+        async function checkStatus() {
+            if (!currentOrderId) {
+                addLog('❌ Nenhum orderId disponível para verificar', 'error');
+                return;
+            }
+            
+            try {
+                addLog(`🔍 Verificando status: GET ${API_URL}/pix?orderId=${currentOrderId}`, 'info');
+                
+                const response = await fetch(`${API_URL}/pix?orderId=${currentOrderId}`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    if (result.isPaid) {
+                        addLog(`✅✅✅ PAGAMENTO CONFIRMADO!`, 'success');
+                        document.getElementById('pixStatus').className = 'status paid';
+                        document.getElementById('pixStatus').textContent = '✅ Pagamento Confirmado!';
+                        stopPolling();
+                    } else if (result.isExpired) {
+                        addLog(`⏰ PIX expirado`, 'warning');
+                        document.getElementById('pixStatus').className = 'status expired';
+                        document.getElementById('pixStatus').textContent = 'PIX Expirado';
+                        stopPolling();
+                    } else {
+                        addLog(`⏳ Status: ${result.status || 'PENDING'}`, 'info');
+                        document.getElementById('pixStatus').className = 'status pending';
+                        document.getElementById('pixStatus').textContent = `Aguardando pagamento (${result.status || 'PENDING'})`;
+                    }
+                } else {
+                    addLog(`❌ Erro ao verificar status: ${result.error}`, 'error');
+                }
+            } catch (error) {
+                addLog(`❌ Erro ao verificar status: ${error.message}`, 'error');
+            }
+        }
+        
+        function startPolling() {
+            if (pollingInterval) {
+                addLog('⚠️ Polling já está ativo', 'warning');
+                return;
+            }
+            
+            addLog('🔄 Iniciando polling (a cada 7.5 segundos)', 'info');
+            document.getElementById('pollingBtn').style.display = 'none';
+            document.getElementById('stopPollingBtn').style.display = 'inline-block';
+            
+            // Verificar imediatamente
+            checkStatus();
+            
+            // Verificar a cada 7.5 segundos
+            pollingInterval = setInterval(() => {
+                checkStatus();
+            }, 7500);
+        }
+        
+        function stopPolling() {
+            if (pollingInterval) {
+                clearInterval(pollingInterval);
+                pollingInterval = null;
+                addLog('⏹️ Polling parado', 'info');
+                document.getElementById('pollingBtn').style.display = 'inline-block';
+                document.getElementById('stopPollingBtn').style.display = 'none';
+            }
+        }
+        
+        // Inicializar com um item padrão
+        window.addEventListener('load', () => {
+            addItem();
+            addLog('✅ Página de teste carregada', 'success');
+            addLog('📝 Preencha os dados e clique em "Criar PIX"', 'info');
+        });
+    </script>
+</body>
+</html>
+
