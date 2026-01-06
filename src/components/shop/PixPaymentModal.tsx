@@ -386,9 +386,19 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
     }
   }, [isOpen]);
 
-  // Criar transação PIX no UmbrellaPag quando o modal abrir
-  // ✅ CORREÇÃO: Remover pixCode das dependências e garantir que só cria quando modal está aberto E limpo
+  // ✅ CORREÇÃO CRÍTICA: Criar transação PIX explicitamente quando modal abrir
   useEffect(() => {
+    // ✅ Log para debug - verificar condições
+    console.log('🔍 useEffect createPIX - Verificando condições:', {
+      isOpen,
+      hasCustomerData: !!customerData,
+      itemsCount: items.length,
+      hasPixCode: !!pixCode,
+      isProcessing,
+      customerName: customerData?.name,
+      customerCPF: customerData?.cpf ? customerData.cpf.substring(0, 3) + '***' : 'não informado',
+    });
+
     // ✅ Só criar se:
     // - Modal está aberto
     // - Tem dados do cliente
@@ -396,6 +406,8 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
     // - NÃO está processando
     // - NÃO tem QR Code ainda (garantir que é novo)
     if (isOpen && customerData && items.length > 0 && !pixCode && !isProcessing) {
+      console.log('✅✅✅ CONDIÇÕES ATENDIDAS - VAI CRIAR PIX AGORA!');
+      
       const createTransaction = async () => {
         try {
           setIsProcessing(true);
@@ -459,6 +471,15 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
           const newOrderId = `ORDER-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
           console.log('🆕 Gerando NOVO pedido com orderId:', newOrderId);
           
+          // ✅ LOG CRÍTICO: Confirmar que vai chamar POST /api/pix
+          console.log('🚨🚨🚨 CHAMANDO POST /api/pix AGORA!', {
+            orderId: newOrderId,
+            customer: customerData.name,
+            itemsCount: items.length,
+            totalPrice: finalPrice,
+            endpoint: import.meta.env.VITE_API_URL || '/api',
+          });
+          
           // Criar transação no UmbrellaPag
           const transaction = await createPixTransaction(
             customerData,
@@ -469,6 +490,14 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
               isFirstPurchase: isFirstPurchase(),
             }
           );
+          
+          // ✅ LOG CRÍTICO: Confirmar que recebeu resposta
+          console.log('📥📥📥 RESPOSTA DO POST /api/pix RECEBIDA!', {
+            hasTransaction: !!transaction,
+            transactionId: transaction?.id,
+            orderId: transaction?.orderId,
+            hasQrCode: !!(transaction?.qrCode || transaction?.pix?.qrCode || transaction?.pix?.qrcode),
+          });
           
           console.log('✅ Transação criada:', {
             id: transaction.id,
@@ -550,6 +579,22 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
       };
       
       createTransaction();
+    } else {
+      // ✅ Log quando NÃO cria (para debug)
+      if (isOpen) {
+        console.warn('⚠️⚠️⚠️ PIX NÃO SERÁ CRIADO - Condições não atendidas:', {
+          isOpen,
+          hasCustomerData: !!customerData,
+          itemsCount: items.length,
+          hasPixCode: !!pixCode,
+          isProcessing,
+          motivo: !customerData ? 'Sem dados do cliente' :
+                  items.length === 0 ? 'Carrinho vazio' :
+                  pixCode ? 'Já tem QR Code' :
+                  isProcessing ? 'Já está processando' :
+                  'Desconhecido'
+        });
+      }
     }
     // ✅ CORREÇÃO: Remover pixCode das dependências para evitar loop
     // O pixCode será definido DEPOIS de receber a resposta do backend

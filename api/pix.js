@@ -31,6 +31,16 @@ function getAPIKey() {
 // CRIAR TRANSAÇÃO PIX
 async function createTransaction(req, res) {
   try {
+    // ✅ LOG CRÍTICO: Confirmar que POST /api/pix foi chamado
+    console.log('🚨🚨🚨 POST /api/pix RECEBIDO - CRIANDO PIX AGORA!', {
+      timestamp: new Date().toISOString(),
+      method: req.method,
+      hasBody: !!req.body,
+      customerName: req.body?.customer?.name,
+      itemsCount: req.body?.items?.length,
+      totalPrice: req.body?.totalPrice,
+    });
+
     const { customer, items, totalPrice, metadata, fbc, fbp } = req.body; // ✅ Receber fbc/fbp do frontend
 
     if (!customer || !customer.name || !customer.cpf) {
@@ -195,6 +205,17 @@ async function createTransaction(req, res) {
       postbackUrl: postbackUrl || '❌ NÃO CONFIGURADO - WEBHOOK NÃO SERÁ CHAMADO!'
     });
 
+    // ✅ LOG CRÍTICO: Confirmar que vai enviar ao gateway
+    console.log('📤📤📤 ENVIANDO PAYLOAD AO GATEWAY UMBRELLAPAG:', {
+      orderId,
+      customerName: umbrellaCustomer.name,
+      customerCPF: normalizedCPF.substring(0, 3) + '***',
+      amountInCents,
+      itemsCount: umbrellaItems.length,
+      gatewayUrl: `${BASE_URL}/user/transactions`,
+      hasPostbackUrl: !!postbackUrl,
+    });
+
     const response = await fetch(`${BASE_URL}/user/transactions`, {
       method: 'POST',
       headers: {
@@ -231,6 +252,15 @@ async function createTransaction(req, res) {
                    transactionData?.copyPaste;
     
     const transactionId = transactionData?.transactionId || transactionData?.id;
+
+    // ✅ LOG CRÍTICO: Confirmar resposta do gateway
+    console.log('📥📥📥 RESPOSTA DO GATEWAY RECEBIDA:', {
+      transactionId,
+      hasQrCode: !!qrCode,
+      qrCodeLength: qrCode ? qrCode.length : 0,
+      status: transactionData?.status,
+      orderId,
+    });
     
     // Salvar no banco
     if (transactionId && supabase) {
