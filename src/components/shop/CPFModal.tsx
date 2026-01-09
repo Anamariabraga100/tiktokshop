@@ -115,7 +115,7 @@ export const CPFModal = ({ isOpen, onClose, onAddCPF }: CPFModalProps) => {
                 <div className="flex items-center gap-2">
                   <CreditCard className="w-5 h-5 text-primary" />
                   <h3 className="text-lg font-semibold">
-                    Dados para nota fiscal
+                    Informações necessárias para sua nota fiscal
                   </h3>
                 </div>
                 <button
@@ -125,6 +125,11 @@ export const CPFModal = ({ isOpen, onClose, onAddCPF }: CPFModalProps) => {
                   <X className="w-4 h-4" />
                 </button>
               </div>
+
+              {/* Microcopy de segurança */}
+              <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
+                Usamos essas informações apenas para emitir a nota fiscal do seu pedido.
+              </p>
 
               {/* Form */}
               <form onSubmit={handleSubmit} className="space-y-4">
@@ -137,9 +142,6 @@ export const CPFModal = ({ isOpen, onClose, onAddCPF }: CPFModalProps) => {
                     onChange={(e) => setName(e.target.value)}
                     required
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Necessário para emissão da nota fiscal
-                  </p>
                 </div>
 
                 <div className="space-y-2">
@@ -152,23 +154,13 @@ export const CPFModal = ({ isOpen, onClose, onAddCPF }: CPFModalProps) => {
                     maxLength={14}
                     required
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Necessário para emissão da nota fiscal
-                  </p>
                 </div>
 
-                {/* Buttons */}
-                <div className="flex gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={onClose}
-                    className="flex-1 py-3 px-4 border border-border rounded-full font-medium text-muted-foreground hover:bg-muted transition-colors"
-                  >
-                    Cancelar
-                  </button>
+                {/* Button */}
+                <div className="pt-2">
                   <button
                     type="submit"
-                    className="flex-1 py-3 px-4 bg-gradient-to-r from-tiktok-pink to-primary text-white rounded-full font-semibold hover:opacity-90 transition-opacity"
+                    className="w-full py-3 px-4 bg-gradient-to-r from-tiktok-pink to-primary text-white rounded-full font-semibold hover:opacity-90 transition-opacity"
                   >
                     Salvar
                   </button>

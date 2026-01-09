@@ -37,10 +37,10 @@ const initialCoupons: Coupon[] = [
   },
   {
     id: '2',
-    code: 'BRINDE50',
-    description: 'Brinde em compras acima de R$50',
-    discountPercent: 0, // Brinde, não é desconto
-    minOrder: 50,
+    code: 'DESCONTO12',
+    description: '12% OFF em pedidos acima de R$45',
+    discountPercent: 12,
+    minOrder: 45,
     expiresAt: null,
     isActive: true,
     isActivated: false,
@@ -74,14 +74,14 @@ export const CouponProvider = ({ children }: { children: ReactNode }) => {
       const savedCoupons = localStorage.getItem('coupons');
       if (savedCoupons) {
         const parsed = JSON.parse(savedCoupons);
-        // Verificar se há cupom antigo FRETE5 e substituir por BRINDE50
-        const hasOldCoupon = parsed.some((c: any) => c.code === 'FRETE5' || c.id === '2' && c.description?.includes('frete'));
+        // Verificar se há cupom antigo e atualizar para DESCONTO12
+        const hasOldCoupon = parsed.some((c: any) => c.code === 'FRETE5' || c.code === 'BRINDE50' || c.code === 'DESCONTO7' || (c.id === '2' && (c.description?.includes('frete') || c.description?.includes('Brinde') || c.description?.includes('7%'))));
         if (hasOldCoupon) {
           // Atualizar cupom antigo para o novo
           const updated = parsed.map((c: any) => {
-            if (c.id === '2' || c.code === 'FRETE5') {
+            if (c.id === '2' || c.code === 'FRETE5' || c.code === 'BRINDE50' || c.code === 'DESCONTO7') {
               return {
-                ...initialCoupons[1], // BRINDE50
+                ...initialCoupons[1], // DESCONTO12
                 isActivated: c.isActivated || false,
                 expiresAt: c.expiresAt ? new Date(c.expiresAt) : null,
               };
@@ -141,12 +141,12 @@ export const CouponProvider = ({ children }: { children: ReactNode }) => {
   // Salvar cupons no localStorage quando mudarem
   useEffect(() => {
     try {
-      // Verificar se algum cupom precisa ser atualizado (migração de FRETE5 para BRINDE50)
-      const needsUpdate = coupons.some(c => c.code === 'FRETE5' || (c.id === '2' && c.description?.includes('frete')));
+      // Verificar se algum cupom precisa ser atualizado (migração para DESCONTO12)
+      const needsUpdate = coupons.some(c => c.code === 'FRETE5' || c.code === 'BRINDE50' || c.code === 'DESCONTO7' || (c.id === '2' && (c.description?.includes('frete') || c.description?.includes('Brinde') || c.description?.includes('7%'))));
       if (needsUpdate) {
         const updated = coupons.map(c => {
-          if (c.id === '2' || c.code === 'FRETE5') {
-            return initialCoupons[1]; // Substituir por BRINDE50
+          if (c.id === '2' || c.code === 'FRETE5' || c.code === 'BRINDE50' || c.code === 'DESCONTO7') {
+            return initialCoupons[1]; // Substituir por DESCONTO12
           }
           return c;
         });

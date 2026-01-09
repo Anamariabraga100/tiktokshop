@@ -1631,7 +1631,7 @@ Montagem de móveis, reparos domésticos, trabalhos em madeira, instalações si
   {
     id: '28',
     name: 'Kit Barbeador e Aparador de Pelos Cuidados Masculinos',
-    price: 4.99,
+    price: 18.90,
     originalPrice: 29.99,
     image: kitBarbeadorAparador,
     rating: 4.8,

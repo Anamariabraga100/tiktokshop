@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Minus, Plus, Trash2, ArrowLeft, Truck, Clock, Ticket, Star, CheckCircle2, FileText, Gift, QrCode, CreditCard, DollarSign } from 'lucide-react';
+import { X, Minus, Plus, Trash2, ArrowLeft, Truck, Clock, Ticket, Star, CheckCircle2, FileText, Gift, QrCode, CreditCard, DollarSign, Sparkles } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import { useCoupons } from '@/context/CouponContext';
 import { useCustomer } from '@/context/CustomerContext';
@@ -10,6 +10,7 @@ import { PixPaymentModal } from './PixPaymentModal';
 import { CardPaymentModal } from './CardPaymentModal';
 import { toast } from 'sonner';
 import { trackInitiateCheckout } from '@/lib/facebookPixel';
+import { getBestBundleOffer, calculateBundlePrice, getAllBundleOffers, BundleOffer } from '@/lib/bundleCalculator';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -40,34 +41,45 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
   const [showPixModal, setShowPixModal] = useState(false);
   const [showCardModal, setShowCardModal] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'pix' | 'card'>('pix');
+  const [selectedBundleQuantity, setSelectedBundleQuantity] = useState<number | null>(null);
 
   // ✅ Frete sempre grátis (sem pedido mínimo)
   const hasFreeShipping = true;
   
-  // ✅ Brinde com threshold de R$ 50
-  const giftThreshold = 50;
-  const missingForGift = Math.max(0, giftThreshold - totalPrice);
-  const giftProgress = Math.min(100, (totalPrice / giftThreshold) * 100);
-  const hasGift = totalPrice >= giftThreshold;
+  // ✅ Calcular total com descontos de bundle aplicados
+  const totalPriceWithBundles = useMemo(() => {
+    return items.reduce((sum, item) => {
+      const bundlePrice = calculateBundlePrice(item.price, item.quantity);
+      return sum + bundlePrice;
+    }, 0);
+  }, [items]);
+  
+  // Usar o total com bundle ao invés do totalPrice simples
+  const effectiveTotalPrice = totalPriceWithBundles > 0 ? totalPriceWithBundles : totalPrice;
 
-  // Outros cupons percentuais são aplicados se ativos
-  const applicableCoupon = getApplicableCoupon(totalPrice);
+  // Outros cupons percentuais são aplicados se ativos (usar effectiveTotalPrice)
+  const applicableCoupon = getApplicableCoupon(effectiveTotalPrice);
   const otherCouponDiscount = applicableCoupon && applicableCoupon.id !== '4'
-    ? (totalPrice * applicableCoupon.discountPercent) / 100
+    ? (effectiveTotalPrice * applicableCoupon.discountPercent) / 100
     : 0;
   
   // Total de desconto de cupons (sem desconto de primeira compra)
   const couponDiscount = otherCouponDiscount;
-  const priceAfterCoupon = totalPrice - couponDiscount;
+  const priceAfterCoupon = effectiveTotalPrice - couponDiscount;
   
   // PIX não tem desconto adicional
   const pixDiscount = 0;
   const priceAfterPix = priceAfterCoupon;
 
-  // Calculate original total and savings
-  const originalTotal = items.reduce((sum, item) => sum + (item.originalPrice || item.price) * item.quantity, 0);
-  const productDiscount = originalTotal - totalPrice;
-  const totalSavings = productDiscount + couponDiscount + pixDiscount;
+  // Calculate original total and savings (usar effectiveTotalPrice para considerar bundles)
+  const originalTotal = items.reduce((sum, item) => {
+    // Preço original sem desconto de bundle (preço unitário * quantidade)
+    return sum + (item.originalPrice || item.price) * item.quantity;
+  }, 0);
+  
+  const bundleDiscount = totalPrice - totalPriceWithBundles;
+  const productDiscount = originalTotal - totalPrice; // Desconto do preço original do produto
+  const totalSavings = bundleDiscount + productDiscount + couponDiscount + pixDiscount;
 
   const formatCouponTime = (ms: number) => {
     const hours = Math.floor(ms / 3600000);
@@ -140,7 +152,7 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
       shippingPrice: price,
       formattedShippingPrice: formatted
     };
-  }, [hasAddress, totalPrice, hasFreeShipping]);
+  }, [hasAddress, effectiveTotalPrice, hasFreeShipping]);
 
   // Calcular preço final incluindo frete
   const finalPrice = priceAfterPix + shippingPrice;
@@ -148,6 +160,8 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
   // Debug: Log dos cálculos
   console.log('🛒 CartDrawer - Cálculo de valores:', {
     totalPrice,
+    totalPriceWithBundles,
+    effectiveTotalPrice,
     otherCouponDiscount,
     couponDiscount,
     priceAfterCoupon,
@@ -170,7 +184,7 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
     }
     
     // Rastrear evento InitiateCheckout no Facebook Pixel
-    const regularItems = items.filter(item => !item.isGift);
+    const regularItems = items;
     const contents = regularItems.map(item => ({
       id: item.id,
       quantity: item.quantity,
@@ -273,6 +287,14 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
   const bestItem = items.length > 0 ? items.reduce((best, item) => 
     (item.soldCount || 0) > (best.soldCount || 0) ? item : best
   ) : null;
+
+  // Reset seleção de bundle se não deve mais mostrar
+  useEffect(() => {
+    const shouldShowBundle = items.length === 1 && items[0].quantity === 1;
+    if (!shouldShowBundle) {
+      setSelectedBundleQuantity(null);
+    }
+  }, [items]);
 
   return (
     <>
@@ -387,45 +409,112 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                       )}
                     </div>
 
-                    {/* Gift Progress */}
-                    {!hasGift && (
-                      <div className="bg-card rounded-lg border border-border p-3">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Truck className="w-4 h-4 text-muted-foreground" />
-                          <span className="text-xs font-semibold">
-                            Falta R$ {missingForGift.toFixed(2).replace('.', ',')} para ganhar o brinde!
-                          </span>
-                        </div>
-                        <div className="relative h-2.5 w-full overflow-hidden rounded-full bg-muted">
-                          <div 
-                            className="h-full bg-gradient-to-r from-success to-success/80 transition-all duration-500 rounded-full flex items-center justify-center"
-                            style={{ width: `${giftProgress}%` }}
-                          >
-                            {giftProgress > 20 && (
-                              <span className="text-[9px] font-bold text-white">
-                                {Math.round(giftProgress)}%
-                              </span>
-                            )}
+                    {/* Bundle Offers - Box fixo com ambas opções */}
+                    {(() => {
+                      const regularItems = items;
+                      // Mostrar bundle apenas se houver exatamente 1 produto com quantity = 1
+                      const shouldShowBundle = regularItems.length === 1 && regularItems[0].quantity === 1;
+                      
+                      if (!shouldShowBundle) return null;
+                      
+                      const item = items[0];
+                      const bundleOffers = getAllBundleOffers(item.price);
+                      
+                      return (
+                        <div className="bg-white rounded-xl border-2 border-primary/40 p-5 shadow-md">
+                          <div className="flex items-center gap-3 mb-5">
+                            <Sparkles className="w-6 h-6 text-primary flex-shrink-0" />
+                            <h3 className="text-lg font-bold text-foreground leading-tight">
+                              Leve mais unidades e economize (frete grátis)
+                            </h3>
+                          </div>
+                          
+                          <div className="space-y-4">
+                            {/* Opções de bundle com radio buttons */}
+                            <div className="space-y-3">
+                              {bundleOffers.map((offer) => {
+                                const isSelected = selectedBundleQuantity === offer.quantity;
+                                const isBest = offer.quantity === 3; // Destacar opção de 3 unidades
+                                
+                                return (
+                                  <label
+                                    key={offer.quantity}
+                                    className={`
+                                      flex items-start gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all
+                                      ${isSelected 
+                                        ? 'border-primary bg-primary/10 shadow-lg' 
+                                        : 'border-border bg-gray-50/50 hover:border-primary/70 hover:bg-gray-50 hover:shadow-md'
+                                      }
+                                      ${isBest ? 'ring-2 ring-success/50' : ''}
+                                    `}
+                                  >
+                                    <input
+                                      type="radio"
+                                      name="bundle-selection"
+                                      value={offer.quantity}
+                                      checked={isSelected}
+                                      onChange={() => setSelectedBundleQuantity(offer.quantity)}
+                                      className="mt-1 w-5 h-5 text-primary border-2 border-gray-300 focus:ring-2 focus:ring-primary focus:ring-offset-2 cursor-pointer"
+                                    />
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center justify-between gap-3 mb-2">
+                                        <p className="text-lg font-bold text-gray-900 leading-snug">
+                                          {offer.quantity} unidades por R$ {offer.totalPrice.toFixed(2).replace('.', ',')}
+                                        </p>
+                                        {isBest && (
+                                          <span className="text-xs px-3 py-1.5 bg-success text-white font-bold rounded-full whitespace-nowrap flex-shrink-0 shadow-sm">
+                                            Melhor
+                                          </span>
+                                        )}
+                                      </div>
+                                      <p className="text-base text-success font-bold leading-relaxed">
+                                        {offer.quantity === 2 
+                                          ? `Economize R$ ${offer.savings.toFixed(2).replace('.', ',')}`
+                                          : offer.helperText
+                                        }
+                                      </p>
+                                    </div>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                            
+                            {/* Botão CTA secundário */}
+                            <div className="space-y-2">
+                              <button
+                                onClick={() => {
+                                  if (!selectedBundleQuantity) {
+                                    toast.error('Selecione uma opção primeiro');
+                                    return;
+                                  }
+                                  
+                                  const selectedOffer = bundleOffers.find(o => o.quantity === selectedBundleQuantity);
+                                  if (!selectedOffer) return;
+                                  
+                                  updateQuantity(item.id, selectedBundleQuantity);
+                                  setSelectedBundleQuantity(null); // Reset seleção
+                                  toast.success(
+                                    `${selectedOffer.quantity} unidades adicionadas! Você economizou R$ ${selectedOffer.savings.toFixed(2).replace('.', ',')}`,
+                                    { duration: 3000 }
+                                  );
+                                }}
+                                disabled={!selectedBundleQuantity}
+                                className="w-full py-3.5 px-4 bg-white border-2 border-primary text-primary rounded-xl font-bold text-base hover:bg-primary/10 hover:border-primary hover:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:border-gray-300 disabled:text-gray-400 shadow-sm"
+                              >
+                                {selectedBundleQuantity 
+                                  ? `Adicionar ${selectedBundleQuantity} unidades ao pedido`
+                                  : 'Aplicar oferta'
+                                }
+                              </button>
+                              {/* Microcopy de segurança */}
+                              <p className="text-xs text-gray-500 text-center leading-relaxed">
+                                Você pode ajustar a quantidade depois, se quiser
+                              </p>
+                            </div>
                           </div>
                         </div>
-                        <div className="flex justify-between items-center mt-1.5">
-                          <span className="text-[10px] text-muted-foreground">R$ 0</span>
-                          <span className="text-[10px] text-muted-foreground">R$ {giftThreshold.toFixed(2).replace('.', ',')}</span>
-                        </div>
-                      </div>
-                    )}
-                    
-                    {/* Mensagem de brinde - Só mostra quando bater R$ 50 */}
-                    {hasGift && totalPrice >= giftThreshold && (
-                      <div className="bg-success/10 rounded-xl border border-success/20 p-4">
-                        <div className="flex items-center gap-2">
-                          <CheckCircle2 className="w-5 h-5 text-success" />
-                          <span className="text-sm font-semibold text-success">
-                            🎉 Parabéns! Você ganhou o brinde!
-                          </span>
-                        </div>
-                      </div>
-                    )}
+                      );
+                    })()}
 
                     {/* Product Section */}
                     <div className="bg-card rounded-xl border border-border p-4">
@@ -437,13 +526,12 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                       </div>
 
                       {items.map((item, index) => {
-                        const isBestChoice = bestItem?.id === item.id && !item.isGift;
+                        const isBestChoice = bestItem?.id === item.id;
                         const itemOriginalPrice = item.originalPrice || item.price;
                         const itemDiscount = itemOriginalPrice - item.price;
                         const itemDiscountPercent = itemOriginalPrice > 0 
                           ? Math.round((itemDiscount / itemOriginalPrice) * 100) 
                           : 0;
-                        const isGift = item.isGift;
 
                         return (
                           <div key={`${item.id}-${item.selectedSize}-${item.selectedColor}`} className={index > 0 ? 'mt-4 pt-4 border-t border-border' : ''}>
@@ -456,14 +544,6 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                               </div>
                             )}
 
-                            {isGift && (
-                              <div className="flex items-center gap-1 mb-2 text-success">
-                                <Gift className="w-4 h-4" />
-                                <span className="text-xs font-medium">
-                                  🎁 Brinde grátis em compras acima de R$50
-                                </span>
-                              </div>
-                            )}
 
                             <div className="flex gap-3">
                               <img
@@ -493,77 +573,75 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                                 )}
                                 
                                 <div className="flex flex-wrap gap-1.5 mb-2">
-                                  {isGift && (
-                                    <span className="text-xs px-2 py-0.5 bg-success/20 text-success rounded font-semibold">
-                                      🎁 Brinde Grátis
-                                    </span>
-                                  )}
-                                  {!isGift && item.isHotDeal && (
+                                  {item.isHotDeal && (
                                     <span className="text-xs px-2 py-0.5 bg-primary text-primary-foreground rounded font-semibold">
                                       Oferta Relâmpago
                                     </span>
                                   )}
-                                  {!isGift && (
-                                    <span className="text-xs px-2 py-0.5 bg-muted text-foreground rounded">
-                                      Devolução gratuita
-                                    </span>
-                                  )}
+                                  <span className="text-xs px-2 py-0.5 bg-muted text-foreground rounded">
+                                    Devolução gratuita
+                                  </span>
                                 </div>
 
                                 <div className="flex items-center gap-2 mb-2">
-                                  {isGift ? (
-                                    <span className="text-base font-bold text-success">
-                                      Grátis
-                                    </span>
-                                  ) : (
-                                    <>
-                                      <span className="text-base font-bold text-foreground">
-                                        R$ {item.price.toFixed(2).replace('.', ',')}
-                                      </span>
-                                      {item.originalPrice && item.originalPrice > item.price && (
-                                        <>
-                                          <span className="text-xs text-muted-foreground line-through">
-                                            R$ {item.originalPrice.toFixed(2).replace('.', ',')}
-                                          </span>
-                                          <span className="text-xs px-1.5 py-0.5 bg-primary/10 text-primary rounded font-semibold">
-                                            -{itemDiscountPercent}%
-                                          </span>
-                                        </>
-                                      )}
-                                    </>
-                                  )}
+                                  {/* Mostrar preço com desconto de bundle se aplicável */}
+                                  {(() => {
+                                    const bundlePrice = calculateBundlePrice(item.price, item.quantity);
+                                    const regularPrice = item.price * item.quantity;
+                                    const hasBundleDiscount = bundlePrice < regularPrice;
+                                    
+                                    return (
+                                      <>
+                                        <span className="text-base font-bold text-foreground">
+                                          R$ {bundlePrice.toFixed(2).replace('.', ',')}
+                                        </span>
+                                        {hasBundleDiscount && (
+                                          <>
+                                            <span className="text-xs text-muted-foreground line-through">
+                                              R$ {regularPrice.toFixed(2).replace('.', ',')}
+                                            </span>
+                                            <span className="text-xs px-1.5 py-0.5 bg-success/20 text-success rounded font-semibold">
+                                              Bundle
+                                            </span>
+                                          </>
+                                        )}
+                                        {!hasBundleDiscount && item.originalPrice && item.originalPrice > item.price && (
+                                          <>
+                                            <span className="text-xs text-muted-foreground line-through">
+                                              R$ {item.originalPrice.toFixed(2).replace('.', ',')}
+                                            </span>
+                                            <span className="text-xs px-1.5 py-0.5 bg-primary/10 text-primary rounded font-semibold">
+                                              -{itemDiscountPercent}%
+                                            </span>
+                                          </>
+                                        )}
+                                      </>
+                                    );
+                                  })()}
                                 </div>
 
                                 <div className="flex items-center justify-between">
-                                  {!isGift ? (
-                                    <>
-                                      <div className="flex items-center gap-2 border border-border rounded-lg">
-                                        <button
-                                          onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                                          className="p-1.5 hover:bg-muted transition-colors"
-                                        >
-                                          <Minus className="w-4 h-4" />
-                                        </button>
-                                        <span className="text-sm font-medium w-8 text-center">{item.quantity}</span>
-                                        <button
-                                          onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                                          className="p-1.5 hover:bg-muted transition-colors"
-                                        >
-                                          <Plus className="w-4 h-4" />
-                                        </button>
-                                      </div>
-                                      <button
-                                        onClick={() => removeFromCart(item.id)}
-                                        className="p-2 text-muted-foreground hover:text-destructive transition-colors"
-                                      >
-                                        <Trash2 className="w-4 h-4" />
-                                      </button>
-                                    </>
-                                  ) : (
-                                    <div className="text-xs text-muted-foreground">
-                                      Brinde adicionado automaticamente
-                                    </div>
-                                  )}
+                                  <div className="flex items-center gap-2 border border-border rounded-lg">
+                                    <button
+                                      onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                                      className="p-1.5 hover:bg-muted transition-colors"
+                                    >
+                                      <Minus className="w-4 h-4" />
+                                    </button>
+                                    <span className="text-sm font-medium w-8 text-center">{item.quantity}</span>
+                                    <button
+                                      onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                                      className="p-1.5 hover:bg-muted transition-colors"
+                                    >
+                                      <Plus className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                  <button
+                                    onClick={() => removeFromCart(item.id)}
+                                    className="p-2 text-muted-foreground hover:text-destructive transition-colors"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
                                 </div>
                               </div>
                             </div>
@@ -587,13 +665,7 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                               </div>
                             </div>
                             <div className="text-right">
-                              {!hasAddress ? (
-                                <span className="text-sm font-bold text-muted-foreground">Preencha o endereço</span>
-                              ) : hasFreeShipping ? (
-                                <span className="text-sm font-bold text-success">Grátis</span>
-                              ) : (
-                                <span className="text-sm font-bold">R$ {formattedShippingPrice}</span>
-                              )}
+                              <span className="text-sm font-bold text-success">Grátis</span>
                             </div>
                           </div>
                         </div>
@@ -619,11 +691,19 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                       
                       <div className="space-y-2 text-sm">
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">Subtotal do produto ^</span>
-                          <span className="font-medium">R$ {totalPrice.toFixed(2).replace('.', ',')}</span>
+                          <span className="text-muted-foreground">Subtotal do produto</span>
+                          <span className="font-medium">R$ {effectiveTotalPrice.toFixed(2).replace('.', ',')}</span>
                         </div>
                         
-                        {originalTotal > totalPrice && (
+                        {/* Mostrar desconto de bundle se houver */}
+                        {totalPriceWithBundles < totalPrice && (
+                          <div className="flex justify-between text-success">
+                            <span>Desconto Bundle (Leve mais, pague menos)</span>
+                            <span className="font-medium">- R$ {(totalPrice - totalPriceWithBundles).toFixed(2).replace('.', ',')}</span>
+                          </div>
+                        )}
+                        
+                        {originalTotal > effectiveTotalPrice && (
                           <>
                             <div className="flex justify-between">
                               <span className="text-muted-foreground">Preço original</span>
@@ -631,7 +711,7 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                             </div>
                             <div className="flex justify-between text-success">
                               <span>Desconto no produto</span>
-                              <span className="font-medium">- R$ {productDiscount.toFixed(2).replace('.', ',')}</span>
+                              <span className="font-medium">- R$ {(originalTotal - effectiveTotalPrice).toFixed(2).replace('.', ',')}</span>
                             </div>
                           </>
                         )}
@@ -655,13 +735,7 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Frete</span>
                           <span className="font-medium">
-                            {!hasAddress ? (
-                              <span className="text-muted-foreground text-sm">Preencha o endereço</span>
-                            ) : hasFreeShipping ? (
-                              <span className="text-success">Grátis</span>
-                            ) : (
-                              <>R$ {formattedShippingPrice}</>
-                            )}
+                            <span className="text-success">Grátis</span>
                           </span>
                         </div>
                       </div>
@@ -674,22 +748,14 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                         <p className="text-xs text-muted-foreground">Impostos inclusos</p>
                       </div>
 
-                      {totalSavings > 0 && (
-                        <div className="mt-3 p-3 bg-primary/10 rounded-lg border border-primary/20">
-                          <p className="text-sm font-medium text-primary flex items-center gap-1">
-                            😊 Você está economizando R$ {totalSavings.toFixed(2).replace('.', ',')} nesse pedido.
+                      {bundleDiscount > 0 && (
+                        <div className="mt-3 p-3 bg-success/10 rounded-lg border border-success/20">
+                          <p className="text-sm font-medium text-success flex items-center gap-1">
+                            💰 Você economizou R$ {bundleDiscount.toFixed(2).replace('.', ',')} ao levar mais unidades
                           </p>
                         </div>
                       )}
 
-                      {/* Mensagem de frete grátis + brinde */}
-                      {!hasFreeShipping && missingForFreeShipping > 0 && (
-                        <div className="mt-3 p-3 bg-success/10 rounded-lg border border-success/20">
-                          <p className="text-sm font-medium text-success flex items-center gap-1">
-                            🎁 Compre mais R$ {missingForGift.toFixed(2).replace('.', ',')} e ganhe o brinde!
-                          </p>
-                        </div>
-                      )}
                     </div>
 
                     {/* Payment Method Selection */}
@@ -848,73 +914,51 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
 
             {/* Texto principal */}
             <div className="space-y-4">
-              <AlertDialogTitle className="text-base font-normal text-foreground leading-tight">
-                Você está economizando R$
+              <AlertDialogTitle className="text-base font-semibold text-foreground leading-tight">
+                Resumo da sua economia neste pedido
               </AlertDialogTitle>
               
-              {/* Valor do desconto total em destaque */}
-              {totalSavings > 0 ? (
+              {/* Mostrar apenas economia do bundle (se houver) */}
+              {bundleDiscount > 0 ? (
                 <div className="space-y-2">
-                  <p className="text-5xl md:text-6xl font-bold text-destructive leading-none">
-                    {totalSavings.toFixed(2).replace('.', ',')}
+                  <p className="text-3xl md:text-4xl font-bold text-success leading-none">
+                    R$ {bundleDiscount.toFixed(2).replace('.', ',')}
                   </p>
-                  <p className="text-xs text-muted-foreground">
-                    {productDiscount > 0 && `R$ ${productDiscount.toFixed(2).replace('.', ',')} em produtos`}
-                    {productDiscount > 0 && couponDiscount > 0 && ' • '}
-                    {couponDiscount > 0 && `R$ ${couponDiscount.toFixed(2).replace('.', ',')} em cupons`}
-                    {pixDiscount > 0 && (productDiscount > 0 || couponDiscount > 0) && ' • '}
-                    {pixDiscount > 0 && `R$ ${pixDiscount.toFixed(2).replace('.', ',')} no PIX`}
-                  </p>
-                </div>
-              ) : couponDiscount > 0 ? (
-                <div className="space-y-2">
-                  <p className="text-5xl md:text-6xl font-bold text-destructive leading-none">
-                    {couponDiscount.toFixed(2).replace('.', ',')}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Com cupons disponíveis
-                  </p>
-                </div>
-              ) : productDiscount > 0 ? (
-                <div className="space-y-2">
-                  <p className="text-5xl md:text-6xl font-bold text-destructive leading-none">
-                    {productDiscount.toFixed(2).replace('.', ',')}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Em descontos de produtos
+                  <p className="text-sm text-muted-foreground">
+                    Economia ao levar mais unidades
                   </p>
                 </div>
               ) : (
                 <div>
-                  <p className="text-5xl md:text-6xl font-bold text-primary leading-none">
-                    {totalPrice.toFixed(2).replace('.', ',')}
+                  <p className="text-3xl md:text-4xl font-bold text-primary leading-none">
+                    R$ {effectiveTotalPrice.toFixed(2).replace('.', ',')}
                   </p>
-                  <p className="text-xs text-muted-foreground mt-2">
+                  <p className="text-sm text-muted-foreground mt-2">
                     Finalize sua compra agora
                   </p>
                 </div>
               )}
               
-              {/* Mensagem persuasiva adicional */}
-              {totalSavings > 0 && (
+              {/* Mensagem de apoio neutra */}
+              {bundleDiscount > 0 && (
                 <div className="pt-2">
                   <p className="text-sm text-muted-foreground leading-relaxed">
-                    Não perca essa oportunidade! Finalize agora e aproveite todos esses descontos.
+                    Finalize agora para manter essa economia aplicada ao seu pedido.
                   </p>
                 </div>
               )}
             </div>
           </AlertDialogHeader>
 
-          {/* Botões */}
-          <div className="flex flex-col gap-3 pt-6 pb-2">
+          {/* Botão */}
+          <div className="pt-6 pb-2">
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={handleFinalizePurchase}
               className="w-full rounded-full bg-gradient-to-r from-destructive to-destructive/90 hover:from-destructive/90 hover:to-destructive text-white py-5 text-base font-bold shadow-lg transition-all relative overflow-hidden"
             >
-              <span className="relative z-10">Finalizar compra e economizar R$ {totalSavings > 0 ? totalSavings.toFixed(2).replace('.', ',') : 'agora'}</span>
+              <span className="relative z-10">Finalizar compra com desconto aplicado</span>
               <motion.div
                 className="absolute inset-0 bg-white/20"
                 initial={{ x: '-100%' }}
@@ -922,12 +966,6 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                 transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
               />
             </motion.button>
-            <button
-              onClick={handleExitConfirm}
-              className="w-full py-3 text-sm text-muted-foreground hover:text-foreground transition-colors font-medium"
-            >
-              Não, obrigado
-            </button>
           </div>
         </AlertDialogContent>
       </AlertDialog>

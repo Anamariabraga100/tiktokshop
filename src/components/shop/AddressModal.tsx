@@ -345,21 +345,11 @@ export const AddressModal = ({ isOpen, onClose, onAddAddress }: AddressModalProp
                   />
                 </div>
 
-                {/* Buttons */}
-                <div className="flex gap-2 sm:gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onClose();
-                    }}
-                    className="flex-1 py-2.5 sm:py-3 px-3 sm:px-4 border border-border rounded-full font-medium text-sm sm:text-base text-muted-foreground hover:bg-muted transition-colors"
-                  >
-                    Cancelar
-                  </button>
+                {/* Button */}
+                <div className="pt-2">
                   <button
                     type="submit"
-                    className="flex-1 py-2.5 sm:py-3 px-3 sm:px-4 bg-gradient-to-r from-tiktok-pink to-primary text-white rounded-full font-semibold text-sm sm:text-base hover:opacity-90 transition-opacity"
+                    className="w-full py-2.5 sm:py-3 px-3 sm:px-4 bg-gradient-to-r from-tiktok-pink to-primary text-white rounded-full font-semibold text-sm sm:text-base hover:opacity-90 transition-opacity"
                   >
                     Salvar
                   </button>

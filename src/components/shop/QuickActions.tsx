@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { MapPin, CreditCard, HelpCircle, Ticket, Gift, Percent, Tag, Sparkles } from 'lucide-react';
+import { MapPin, CreditCard, HelpCircle, Ticket, Percent, Tag, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface QuickActionsProps {
@@ -28,7 +28,6 @@ export const QuickActions = ({ onCouponsClick, onOffersClick, onAddressClick }: 
   const actions = [
     { icon: Percent, label: 'Cupons', badge: '3', onClick: onCouponsClick },
     { icon: Tag, label: 'Vouchers', badge: '2', onClick: onCouponsClick },
-    { icon: Gift, label: 'Brindes', badge: '1', onClick: onCouponsClick },
     { icon: Sparkles, label: 'Ofertas', onClick: onOffersClick },
     { icon: MapPin, label: 'Endereço', onClick: handleAddressClick },
     { icon: CreditCard, label: 'Pagamento', onClick: handlePaymentClick },
