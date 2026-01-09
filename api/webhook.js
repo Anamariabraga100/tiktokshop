@@ -5,10 +5,20 @@
 
 import { supabase } from './lib/supabase.js';
 
+// Helper: Detectar se o webhook é da LxPay (formato específico)
+// ✅ Baseado na documentação oficial da LxPay
+function isLxPayWebhook(body) {
+  return (
+    body?.event === 'TRANSACTION_PAID' &&
+    body?.transaction?.identifier &&
+    body?.transaction?.status === 'COMPLETED'
+  );
+}
+
 // Helper: Detectar qual gateway está enviando o webhook
 function detectGateway(body) {
-  // LxPay: geralmente tem transactionId no topo e estrutura diferente
-  if (body?.transactionId || body?.status === 'OK' || body?.order?.id) {
+  // ✅ LxPay: formato específico com event === 'TRANSACTION_PAID' e transaction.status === 'COMPLETED'
+  if (isLxPayWebhook(body)) {
     return 'lxpay';
   }
   
@@ -17,15 +27,73 @@ function detectGateway(body) {
     return 'umbrellapag';
   }
   
+  // Outros formatos possíveis do LxPay (fallback)
+  if (body?.transactionId || body?.status === 'OK' || body?.order?.id) {
+    return 'lxpay';
+  }
+  
   return 'unknown';
 }
 
-// Helper: Extrair dados do novo gateway
+// Helper: Extrair dados do webhook da LxPay (formato oficial)
+// ✅ Baseado na documentação oficial da LxPay e webhook real recebido
+function parseLxPayWebhook(body) {
+  // Formato oficial da LxPay:
+  // {
+  //   "event": "TRANSACTION_PAID",
+  //   "transaction": {
+  //     "id": "txn_abc123",
+  //     "identifier": "ORDER-123",
+  //     "status": "COMPLETED",
+  //     "amount": "990", // ⚠️ IMPORTANTE: em centavos como string
+  //     "paymentMethod": "PIX"
+  //   }
+  // }
+  
+  const transaction = body?.transaction || {};
+  const transactionId = transaction.id || body?.transactionId;
+  const orderId = transaction.identifier; // ✅ Usar transaction.identifier (não offerCode)
+  const status = transaction.status; // 'COMPLETED'
+  const paymentMethod = transaction.paymentMethod;
+  
+  // ⚠️ IMPORTANTE: amount vem em centavos como string ("990") → converter para decimal (9.90)
+  const amountInCents = transaction.amount || body?.amount || '0';
+  const amount = Number(amountInCents) / 100; // Converter centavos para decimal
+  
+  // originalAmount pode estar disponível mas é só informativo - usar amount
+  // const originalAmount = transaction.originalAmount; // Ex: "9.9"
+  
+  const paidAt = transaction.paidAt || transaction.createdAt || new Date().toISOString();
+  const endToEndId = transaction.endToEndId || transaction.end_to_end_id;
+  
+  return {
+    transactionId,
+    status: status || 'COMPLETED',
+    orderId,
+    amount, // ✅ Já convertido de centavos para decimal
+    paidAt,
+    endToEndId,
+    paymentMethod,
+    metadata: {
+      event: body?.event,
+      ...transaction
+    },
+    raw: body
+  };
+}
+
+// Helper: Extrair dados do novo gateway (formato genérico - mantido para compatibilidade)
 function parseNewGatewayWebhook(body) {
+  // Se for formato específico da LxPay, usar parser específico
+  if (isLxPayWebhook(body)) {
+    return parseLxPayWebhook(body);
+  }
+  
+  // Formato genérico (fallback)
   const transactionId = body?.transactionId || body?.order?.id;
   const status = body?.status; // 'OK', 'PAID', etc.
   const orderId = body?.identifier || body?.metadata?.orderId || body?.orderId;
-  const amount = body?.amount; // Já em decimal
+  const amount = body?.amount; // Assumir que já está em decimal
   const paidAt = body?.paidAt || body?.paid_at || (status === 'PAID' || status === 'OK' ? new Date().toISOString() : null);
   const endToEndId = body?.endToEndId || body?.end_to_end_id;
   
@@ -121,12 +189,29 @@ export default async function handler(req, res) {
     let webhookData = null;
     
     // Parsear dados conforme o gateway
-    if (gateway === 'lxpay' || gateway === 'new_gateway') {
-      webhookData = parseNewGatewayWebhook(body);
+    if (gateway === 'lxpay') {
+      // ✅ Usar parser específico da LxPay (formato oficial)
+      webhookData = parseLxPayWebhook(body);
+      console.log('✅ Webhook da LxPay detectado e parseado:', {
+        event: body?.event,
+        transactionStatus: body?.transaction?.status,
+        orderId: webhookData.orderId,
+        amount: webhookData.amount,
+        amountInCents: body?.transaction?.amount
+      });
     } else if (gateway === 'umbrellapag') {
       webhookData = parseUmbrellaPayWebhook(body);
+    } else if (gateway === 'new_gateway') {
+      // Formato genérico (compatibilidade)
+      webhookData = parseNewGatewayWebhook(body);
     } else {
-      console.warn('⚠️ Formato de webhook desconhecido:', body);
+      console.warn('⚠️ Formato de webhook desconhecido:', {
+        bodyKeys: Object.keys(body || {}),
+        bodyPreview: JSON.stringify(body).substring(0, 500),
+        hasEvent: !!body?.event,
+        hasTransaction: !!body?.transaction,
+        eventValue: body?.event
+      });
       return res.status(200).json({ success: true, message: 'Webhook recebido mas formato não reconhecido' });
     }
 
@@ -178,8 +263,10 @@ export default async function handler(req, res) {
     const finalOrderId = webhookData.orderId || orderId;
 
     // Normalizar status para comparação
+    // ✅ LxPay usa 'COMPLETED', UmbrellaPay usa 'PAID'
     const normalizedStatus = status?.toUpperCase() || '';
     const isPaid = normalizedStatus === 'PAID' || 
+                   normalizedStatus === 'COMPLETED' || // ✅ LxPay
                    normalizedStatus === 'OK' || 
                    normalizedStatus === 'CONFIRMED' || 
                    normalizedStatus === 'PAID_OUT' ||
