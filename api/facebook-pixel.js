@@ -6,6 +6,8 @@ import { createHash } from 'crypto';
 
 /**
  * Faz hash SHA256 de dados PII (obrigatório pelo Facebook)
+ * ✅ IMPORTANTE: Todos os campos de user_data DEVEM ser hasheados,
+ * EXCETO: fbc, fbp, client_user_agent
  */
 function hashSHA256(value) {
   if (!value) return undefined;
@@ -13,6 +15,19 @@ function hashSHA256(value) {
   if (!normalized) return undefined;
   return createHash('sha256').update(normalized).digest('hex');
 }
+
+/**
+ * Verifica se uma string é um hash SHA256 válido (64 caracteres hexadecimais)
+ */
+function isSha256(value) {
+  if (!value || typeof value !== 'string') return false;
+  return /^[a-f0-9]{64}$/i.test(value);
+}
+
+/**
+ * Campos que NÃO devem ser hasheados (permitidos em texto plano)
+ */
+const ALLOWED_PLAIN_FIELDS = ['fbc', 'fbp', 'client_user_agent'];
 
 export default async function handler(req, res) {
   try {
@@ -131,8 +146,11 @@ export default async function handler(req, res) {
         const zpHash = hashSHA256(cep);
         if (zpHash) eventData.user_data.zp = zpHash;
       }
-      // country não precisa de hash (não é PII)
-      if (userData.address.country) eventData.user_data.country = userData.address.country;
+      // ✅ country DEVE ser hasheado (Facebook exige hash de TODOS os campos, exceto fbc/fbp/client_user_agent)
+      if (userData.address.country) {
+        const countryHash = hashSHA256(userData.address.country);
+        if (countryHash) eventData.user_data.country = countryHash;
+      }
     }
 
     // ✅ Adicionar fbc e fbp DENTRO de user_data (OBRIGATÓRIO pelo Facebook)
@@ -195,6 +213,21 @@ export default async function handler(req, res) {
       access_token: ACCESS_TOKEN
     };
 
+    // ✅ Validação: Garantir que todos os campos (exceto fbc/fbp/client_user_agent) estão hasheados
+    const validationErrors = [];
+    Object.entries(eventData.user_data).forEach(([key, value]) => {
+      if (!ALLOWED_PLAIN_FIELDS.includes(key) && value) {
+        if (!isSha256(value)) {
+          validationErrors.push(`Campo ${key} não está em SHA256: "${value}"`);
+        }
+      }
+    });
+    
+    if (validationErrors.length > 0) {
+      console.error('❌ [VALIDAÇÃO] Campos de user_data não hasheados:', validationErrors);
+      // Não bloquear o envio, mas logar o erro claramente
+    }
+
     // ✅ Log de validação do user_data antes do POST
     console.log('📦 [SERVER-SIDE] user_data enviado ao Facebook:', {
       hasEmail: !!eventData.user_data.em,
@@ -202,9 +235,14 @@ export default async function handler(req, res) {
       hasFirstName: !!eventData.user_data.fn,
       hasLastName: !!eventData.user_data.ln,
       hasExternalId: !!eventData.user_data.external_id,
+      hasCity: !!eventData.user_data.ct,
+      hasState: !!eventData.user_data.st,
+      hasZip: !!eventData.user_data.zp,
+      hasCountry: !!eventData.user_data.country,
       fbc: eventData.user_data.fbc || 'não fornecido',
       fbp: eventData.user_data.fbp || 'não fornecido',
-      totalFields: Object.keys(eventData.user_data).length
+      totalFields: Object.keys(eventData.user_data).length,
+      validationErrors: validationErrors.length > 0 ? validationErrors : 'nenhum erro'
     });
 
     console.log('📤 [SERVER-SIDE] Payload para Facebook CAPI:', {
