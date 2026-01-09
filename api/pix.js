@@ -10,7 +10,7 @@
 
 import { supabase } from './lib/supabase.js';
 
-const BASE_URL = 'https://api-gateway.umbrellapag.com/api';
+const UMBRELLAPAG_BASE_URL = 'https://api-gateway.umbrellapag.com/api';
 
 // Helper: Configurar CORS
 function setCORS(res, methods = 'GET, POST, OPTIONS') {
@@ -19,16 +19,305 @@ function setCORS(res, methods = 'GET, POST, OPTIONS') {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 }
 
-// Helper: Verificar API Key
-function getAPIKey() {
-  const API_KEY = process.env.UMBRELLAPAG_API_KEY;
-  if (!API_KEY) {
-    throw new Error('UMBRELLAPAG_API_KEY não configurada');
-  }
-  return API_KEY;
+// Helper: Verificar API Key UmbrellaPay (retorna null se não configurada)
+// ⚠️ NÃO fazer throw aqui - validar apenas dentro do bloco de fallback
+function getUmbrellaPayAPIKey() {
+  return process.env.UMBRELLAPAG_API_KEY || null;
 }
 
-// CRIAR TRANSAÇÃO PIX
+// Helper: Verificar Public Key do LxPay
+function getLxPayPublicKey() {
+  const PUBLIC_KEY = process.env.NEW_GATEWAY_PUBLIC_KEY || process.env.LXPAY_PUBLIC_KEY || 'comprarbms_1767919324079';
+  if (!PUBLIC_KEY) {
+    throw new Error('NEW_GATEWAY_PUBLIC_KEY não configurada');
+  }
+  return PUBLIC_KEY;
+}
+
+// Helper: Verificar Secret Key do LxPay
+function getLxPaySecretKey() {
+  const SECRET_KEY = process.env.NEW_GATEWAY_PRIVATE_KEY || process.env.NEW_GATEWAY_SECRET_KEY || process.env.LXPAY_PRIVATE_KEY || '174bbcd3-2157-42cd-925f-9447a8a642d3';
+  if (!SECRET_KEY) {
+    throw new Error('NEW_GATEWAY_PRIVATE_KEY não configurada');
+  }
+  return SECRET_KEY;
+}
+
+// Helper: Obter base URL do LxPay
+function getLxPayBaseURL() {
+  const BASE_URL = process.env.NEW_GATEWAY_BASE_URL || process.env.LXPAY_BASE_URL || 'https://api.lxpay.com.br';
+  return BASE_URL.replace(/\/$/, ''); // Remove trailing slash
+}
+
+// CRIAR TRANSAÇÃO PIX - LXPAY (PRINCIPAL)
+async function createTransactionWithNewGateway(req, orderId, customer, items, totalPrice, normalizedCPF, phone, customerEmail, postbackUrl, metadata, fbc, fbp) {
+  try {
+    const lxPayBaseURL = getLxPayBaseURL();
+    const lxPayPublicKey = getLxPayPublicKey();
+    const lxPaySecretKey = getLxPaySecretKey();
+    
+    // Formatar dados para o LxPay
+    const normalizedPrice = Number(Number(totalPrice).toFixed(2));
+    
+    // Construir payload conforme documentação do LxPay
+    const payload = {
+      identifier: orderId,
+      amount: normalizedPrice, // Decimal, não centavos
+      client: {
+        name: customer.name.trim(),
+        email: customerEmail,
+        phone: phone,
+        document: normalizedCPF
+      },
+      products: items
+        .filter(item => item.price > 0 && item.name && item.name.trim() !== '')
+        .map(item => ({
+          id: item.id || `prod_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+          name: item.name.trim(),
+          quantity: Math.max(1, Math.floor(item.quantity || 1)),
+          price: Number(Number(item.price).toFixed(2))
+        })),
+      dueDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 24 horas
+      callbackUrl: postbackUrl || undefined,
+      metadata: {
+        ...metadata,
+        orderId: orderId,
+        ...(fbc ? { fbc } : {}),
+        ...(fbp ? { fbp } : {})
+      }
+    };
+
+    console.log('🚀 Criando PIX no LxPay:', {
+      gatewayUrl: `${lxPayBaseURL}/api/v1/gateway/pix/receive`,
+      orderId,
+      amount: payload.amount,
+      clientName: payload.client.name,
+      productsCount: payload.products.length,
+      hasCallbackUrl: !!payload.callbackUrl,
+      publicKey: lxPayPublicKey.substring(0, 10) + '...' // Log parcial por segurança
+    });
+
+    // 🔐 Autenticação LxPay: x-public-key + x-secret-key (OBRIGATÓRIO)
+    // A LxPay usa autenticação via headers: x-public-key e x-secret-key
+    // ⚠️ NÃO usar Authorization Bearer
+    // ⚠️ NÃO usar API Key única
+    // Todas as requisições DEVEM conter ambos os headers
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000); // Timeout de 8 segundos
+    
+    try {
+      const response = await fetch(`${lxPayBaseURL}/api/v1/gateway/pix/receive`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-public-key': lxPayPublicKey,     // Public Key (identificação)
+          'x-secret-key': lxPaySecretKey       // Secret Key (autenticação)
+          // ⚠️ NÃO usar Authorization header aqui
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+
+      const text = await response.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = { raw: text.substring(0, 500) };
+      }
+
+      if (!response.ok) {
+        console.error('❌ Erro na API do LxPay:', {
+          status: response.status,
+          data,
+          errorCode: data?.errorCode,
+          message: data?.message,
+          details: data?.details
+        });
+        
+        // Se erro de autenticação, verificar headers
+        if (response.status === 401 || response.status === 403) {
+          console.error('⚠️ ERRO DE AUTENTICAÇÃO: Verifique se os headers x-public-key e x-secret-key estão corretos');
+        }
+        
+        throw new Error(data?.message || `Erro HTTP ${response.status}: ${text.substring(0, 200)}`);
+      }
+
+      // Verificar formato de resposta do LxPay
+      const transactionId = data?.transactionId || data?.order?.id;
+      const qrCode = data?.pix?.code || data?.pix?.qrCode || '';
+      const status = data?.status || 'OK';
+
+      if (!qrCode || qrCode.trim() === '') {
+        throw new Error('QR Code não foi retornado pelo LxPay');
+      }
+
+      console.log('✅✅✅ PIX criado com sucesso no LxPay:', {
+        transactionId,
+        orderId,
+        hasQrCode: !!qrCode,
+        status
+      });
+
+      return {
+        success: true,
+        transactionId,
+        qrCode,
+        status,
+        gateway: 'lxpay',
+        rawResponse: data
+      };
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      if (fetchError.name === 'AbortError') {
+        throw new Error('Timeout ao criar transação no LxPay (8 segundos)');
+      }
+      throw fetchError;
+    }
+  } catch (error) {
+    console.error('❌ Erro ao criar transação no LxPay:', error);
+    throw error;
+  }
+}
+
+// CRIAR TRANSAÇÃO PIX - UMBRELLAPAY (FALLBACK)
+async function createTransactionWithUmbrellaPay(req, orderId, customer, items, totalPrice, normalizedCPF, phone, customerEmail, postbackUrl, metadata, fbc, fbp) {
+  try {
+    // ✅ API Key já validada antes de chamar esta função (no bloco de fallback)
+    // Esta validação é uma segurança extra
+    const API_KEY = getUmbrellaPayAPIKey();
+    if (!API_KEY) {
+      throw new Error('UMBRELLAPAG_API_KEY não configurada');
+    }
+    
+    const normalizedPrice = Number(Number(totalPrice).toFixed(2));
+    const amountInCents = Math.round(normalizedPrice * 100);
+
+    const umbrellaCustomer = {
+      name: customer.name.trim(),
+      phone: phone,
+      email: customerEmail,
+      document: {
+        type: 'CPF',
+        number: normalizedCPF
+      }
+    };
+
+    const umbrellaItems = items
+      .filter(item => item.price > 0 && item.name && item.name.trim() !== '')
+      .map(item => {
+        const itemPrice = Number(Number(item.price).toFixed(2));
+        const quantity = Math.max(1, Math.floor(item.quantity || 1));
+        
+        if (itemPrice <= 0) {
+          throw new Error(`Preço inválido para item: ${item.name}`);
+        }
+        
+        if (!item.name || item.name.trim() === '') {
+          throw new Error('Nome do item não pode estar vazio');
+        }
+        
+        return {
+          title: item.name.trim(),
+          unitPrice: Math.round(itemPrice * 100), // Converter para centavos
+          quantity: quantity,
+          tangible: true
+        };
+      });
+
+    const clientIP = req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+                     req.headers['x-real-ip'] ||
+                     req.connection?.remoteAddress ||
+                     req.socket?.remoteAddress ||
+                     '127.0.0.1';
+
+    const payload = {
+      amount: amountInCents,
+      currency: 'BRL',
+      paymentMethod: 'PIX',
+      installments: 1,
+      traceable: true,
+      ip: clientIP,
+      customer: umbrellaCustomer,
+      items: umbrellaItems,
+      pix: {
+        expiresInDays: 1
+      },
+      ...(postbackUrl ? { postbackUrl: postbackUrl } : {}),
+      metadata: JSON.stringify({
+        orderId: orderId,
+        ...metadata
+      })
+    };
+
+    console.log('🚀 Criando PIX no UmbrellaPay (fallback):', {
+      gatewayUrl: `${UMBRELLAPAG_BASE_URL}/user/transactions`,
+      orderId,
+      amountInCents,
+      itemsCount: umbrellaItems.length
+    });
+
+    const response = await fetch(`${UMBRELLAPAG_BASE_URL}/user/transactions`, {
+      method: 'POST',
+      headers: {
+        'x-api-key': API_KEY,
+        'User-Agent': 'UMBRELLAB2B/1.0',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const text = await response.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { raw: text.substring(0, 500) };
+    }
+
+    if (!response.ok) {
+      const refusedReason = data?.error?.refusedReason || data?.data?.refusedReason || 'Erro de validação nos dados fornecidos';
+      const provider = data?.error?.provider || data?.data?.provider || 'Desconhecido';
+      
+      throw new Error(`Transação recusada pelo UmbrellaPay: ${refusedReason} (Provider: ${provider})`);
+    }
+
+    const transactionData = data?.data || data;
+    const qrCode = transactionData?.pix?.qrcode || 
+                   transactionData?.pix?.qrCode || 
+                   transactionData?.qrCode ||
+                   transactionData?.pix?.copyPaste ||
+                   transactionData?.copyPaste;
+    
+    const transactionId = transactionData?.transactionId || transactionData?.id;
+
+    if (!qrCode || qrCode.trim() === '') {
+      throw new Error('QR Code não foi retornado pelo UmbrellaPay');
+    }
+
+    console.log('✅✅✅ PIX criado com sucesso no UmbrellaPay (fallback):', {
+      transactionId,
+      orderId,
+      hasQrCode: !!qrCode
+    });
+
+    return {
+      success: true,
+      transactionId,
+      qrCode,
+      status: transactionData?.status || 'WAITING_PAYMENT',
+      gateway: 'umbrellapag',
+      rawResponse: transactionData
+    };
+  } catch (error) {
+    console.error('❌ Erro ao criar transação no UmbrellaPay:', error);
+    throw error;
+  }
+}
+
+// CRIAR TRANSAÇÃO PIX (MAIN FUNCTION)
 async function createTransaction(req, res) {
   try {
     // ✅ LOG CRÍTICO: Confirmar que POST /api/pix foi chamado
@@ -64,11 +353,9 @@ async function createTransaction(req, res) {
       });
     }
 
-    const API_KEY = getAPIKey();
     const orderId = metadata?.orderId || `ORDER-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
     const normalizedCPF = customer.cpf.replace(/\D/g, '');
     const normalizedPrice = Number(Number(totalPrice).toFixed(2));
-    const amountInCents = Math.round(normalizedPrice * 100);
     const normalizedPhone = customer.phone?.replace(/\D/g, '') || '11999999999';
     const phone = normalizedPhone.length >= 10 ? normalizedPhone : '11999999999';
 
@@ -149,16 +436,6 @@ async function createTransaction(req, res) {
       });
     }
 
-    const umbrellaCustomer = {
-      name: customer.name.trim(), // ✅ Remover espaços extras
-      phone: phone,
-      email: customerEmail,
-      document: {
-        type: 'CPF',
-        number: normalizedCPF
-      }
-    };
-
     // ✅ Validar e formatar itens
     if (!items || items.length === 0) {
       return res.status(400).json({
@@ -167,46 +444,11 @@ async function createTransaction(req, res) {
       });
     }
 
-    const umbrellaItems = items
-      .filter(item => item.price > 0 && item.name && item.name.trim() !== '')
-      .map(item => {
-        const itemPrice = Number(Number(item.price).toFixed(2));
-        const quantity = Math.max(1, Math.floor(item.quantity || 1)); // Garantir quantidade mínima 1
-        
-        if (itemPrice <= 0) {
-          throw new Error(`Preço inválido para item: ${item.name}`);
-        }
-        
-        if (!item.name || item.name.trim() === '') {
-          throw new Error('Nome do item não pode estar vazio');
-        }
-        
-        return {
-          title: item.name.trim(), // ✅ Remover espaços extras
-          unitPrice: Math.round(itemPrice * 100), // ✅ Converter para centavos
-          quantity: quantity,
-          tangible: true
-        };
-      });
-
-    // ✅ Validar se sobrou algum item após filtragem
-    if (umbrellaItems.length === 0) {
+    const validItems = items.filter(item => item.price > 0 && item.name && item.name.trim() !== '');
+    if (validItems.length === 0) {
       return res.status(400).json({
         success: false,
         error: 'Nenhum item válido encontrado. Verifique os preços e nomes dos produtos.'
-      });
-    }
-
-    // ✅ Validar se o total dos itens bate com o totalPrice
-    const itemsTotal = umbrellaItems.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
-    const totalDifference = Math.abs(itemsTotal - amountInCents);
-    
-    // Permitir diferença de até 1 centavo (arredondamento)
-    if (totalDifference > 1) {
-      console.warn('⚠️ Diferença entre total dos itens e totalPrice:', {
-        itemsTotal,
-        amountInCents,
-        difference: totalDifference
       });
     }
 
@@ -243,152 +485,76 @@ async function createTransaction(req, res) {
       console.warn('⚠️ ⚠️ ⚠️ ATENÇÃO: postbackUrl não configurado! Webhook não será chamado!');
       console.warn('⚠️ Configure VITE_POSTBACK_URL ou POSTBACK_URL nas variáveis de ambiente da Vercel');
     }
+
+    // 🎯 TENTAR LXPAY PRIMEIRO (PRINCIPAL)
+    let transactionResult = null;
+    let usedGateway = null;
     
-    // ✅ Obter IP do cliente (obrigatório pelo gateway)
-    const clientIP = req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
-                     req.headers['x-real-ip'] ||
-                     req.connection?.remoteAddress ||
-                     req.socket?.remoteAddress ||
-                     '127.0.0.1';
-
-    // ✅ Construir payload completo conforme documentação UmbrellaPag
-    const payload = {
-      amount: amountInCents,
-      currency: 'BRL',
-      paymentMethod: 'PIX',
-      installments: 1, // ✅ OBRIGATÓRIO: PIX sempre 1 parcela
-      traceable: true, // ✅ OBRIGATÓRIO: rastreamento habilitado
-      ip: clientIP, // ✅ OBRIGATÓRIO: IP do cliente
-      customer: umbrellaCustomer,
-      items: umbrellaItems,
-      pix: {
-        expiresInDays: 1
-      },
-      // ✅ postbackUrl é obrigatório para o webhook funcionar
-      // Se não tiver URL, não incluir (mas avisar nos logs)
-      ...(postbackUrl ? { postbackUrl: postbackUrl } : {}),
-      metadata: JSON.stringify({
-        orderId: orderId,
-        ...metadata
-      })
-    };
-
-    // ✅ Log do payload completo para debug
-    console.log('📋 Payload completo para gateway:', {
-      amount: payload.amount,
-      currency: payload.currency,
-      paymentMethod: payload.paymentMethod,
-      installments: payload.installments,
-      traceable: payload.traceable,
-      ip: payload.ip,
-      customer: {
-        name: payload.customer.name,
-        email: payload.customer.email,
-        phone: payload.customer.phone,
-        document: payload.customer.document
-      },
-      itemsCount: payload.items.length,
-      hasPostbackUrl: !!payload.postbackUrl,
-      metadata: payload.metadata
-    });
-    
-    // Avisar se postbackUrl não foi configurado
-    if (!postbackUrl) {
-      console.error('❌❌❌ CRÍTICO: postbackUrl não configurado! O webhook NÃO será chamado pelo gateway!');
-      console.error('❌ Configure VITE_POSTBACK_URL ou POSTBACK_URL nas variáveis de ambiente da Vercel');
-      console.error('❌ Exemplo: https://tiktokshop-orpin.vercel.app/api/webhook');
-    }
-
-    console.log('🚀 Criando PIX:', {
-      amount: amountInCents,
-      customer: umbrellaCustomer.name,
-      itemsCount: umbrellaItems.length,
-      orderId: orderId,
-      postbackUrl: postbackUrl || '❌ NÃO CONFIGURADO - WEBHOOK NÃO SERÁ CHAMADO!'
-    });
-
-    // ✅ LOG CRÍTICO: Confirmar que vai enviar ao gateway
-    console.log('📤📤📤 ENVIANDO PAYLOAD AO GATEWAY UMBRELLAPAG:', {
-      orderId,
-      customerName: umbrellaCustomer.name,
-      customerCPF: normalizedCPF.substring(0, 3) + '***',
-      amountInCents,
-      itemsCount: umbrellaItems.length,
-      gatewayUrl: `${BASE_URL}/user/transactions`,
-      hasPostbackUrl: !!postbackUrl,
-    });
-
-    const response = await fetch(`${BASE_URL}/user/transactions`, {
-      method: 'POST',
-      headers: {
-        'x-api-key': API_KEY,
-        'User-Agent': 'UMBRELLAB2B/1.0',
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    });
-
-    const text = await response.text();
-    let data;
     try {
-      data = JSON.parse(text);
-    } catch {
-      data = { raw: text.substring(0, 500) };
-    }
-
-    if (!response.ok) {
-      console.error('❌ Erro na API UmbrellaPag:', { 
-        status: response.status, 
-        data,
-        refusedReason: data?.error?.refusedReason,
-        provider: data?.error?.provider
-      });
+      console.log('🚀 Tentando criar PIX no LxPay (principal)...');
+      transactionResult = await createTransactionWithNewGateway(
+        req, orderId, customer, validItems, totalPrice, 
+        normalizedCPF, phone, customerEmail, postbackUrl, metadata, fbc, fbp
+      );
+      usedGateway = 'lxpay';
+      console.log('✅✅✅ Sucesso no LxPay!');
+    } catch (lxPayError) {
+      console.warn('⚠️ Falha no LxPay, tentando UmbrellaPay (fallback):', lxPayError.message);
       
-      // ✅ Extrair motivo específico da recusa
-      const refusedReason = data?.error?.refusedReason || data?.data?.refusedReason || 'Erro de validação nos dados fornecidos';
-      const provider = data?.error?.provider || data?.data?.provider || 'Desconhecido';
-      
-      return res.status(response.status).json({
-        success: false,
-        status: response.status,
-        error: `Transação recusada pelo gateway: ${refusedReason}`,
-        details: {
-          provider,
-          refusedReason,
-          gatewayMessage: data?.message,
-          gatewayData: data?.data
+      // 🔄 FALLBACK PARA UMBRELLAPAY
+      // ✅ A validação da API Key do UmbrellaPay só acontece AQUI dentro do fallback
+      try {
+        // Verificar se a API Key está configurada antes de tentar usar
+        const umbrellaPayKey = getUmbrellaPayAPIKey();
+        if (!umbrellaPayKey) {
+          console.error('❌ UmbrellaPay não disponível - UMBRELLAPAG_API_KEY não configurada');
+          throw new Error('Falha no gateway principal (LxPay) e fallback (UmbrellaPay) indisponível - Configure UMBRELLAPAG_API_KEY para usar o fallback');
         }
+        
+        console.log('🔄 Tentando criar PIX no UmbrellaPay (fallback)...');
+        transactionResult = await createTransactionWithUmbrellaPay(
+          req, orderId, customer, validItems, totalPrice, 
+          normalizedCPF, phone, customerEmail, postbackUrl, metadata, fbc, fbp
+        );
+        usedGateway = 'umbrellapag';
+        console.log('✅✅✅ Sucesso no UmbrellaPay (fallback)!');
+      } catch (umbrellaPayError) {
+        console.error('❌❌❌ Erro em ambos os gateways:', {
+          lxPay: lxPayError.message,
+          umbrellaPay: umbrellaPayError.message
+        });
+        return res.status(500).json({
+          success: false,
+          error: umbrellaPayError.message.includes('indisponível') 
+            ? umbrellaPayError.message 
+            : 'Não foi possível criar a transação PIX. Tente novamente.',
+          details: {
+            lxPayError: lxPayError.message,
+            umbrellaPayError: umbrellaPayError.message
+          }
+        });
+      }
+    }
+
+    if (!transactionResult || !transactionResult.success) {
+      return res.status(500).json({
+        success: false,
+        error: 'Falha ao criar transação PIX'
       });
     }
 
-    const transactionData = data?.data || data;
-    const qrCode = transactionData?.pix?.qrcode || 
-                   transactionData?.pix?.qrCode || 
-                   transactionData?.qrCode ||
-                   transactionData?.pix?.copyPaste ||
-                   transactionData?.copyPaste;
+    const { transactionId, qrCode, status: transactionStatus } = transactionResult;
     
-    const transactionId = transactionData?.transactionId || transactionData?.id;
-
-    // ✅ LOG CRÍTICO: Confirmar resposta do gateway
-    console.log('📥📥📥 RESPOSTA DO GATEWAY RECEBIDA:', {
-      transactionId,
-      hasQrCode: !!qrCode,
-      qrCodeLength: qrCode ? qrCode.length : 0,
-      status: transactionData?.status,
-      orderId,
-    });
+    // Calcular expiração (1 dia = 24 horas = 86400000ms)
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
     
     // Salvar no banco
     if (transactionId && supabase) {
       try {
-        // Calcular expiração (1 dia = 24 horas = 86400000ms)
-        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-        
         const orderData = {
           order_number: orderId,
           customer_cpf: normalizedCPF,
-          items: items.map(item => ({
+          items: validItems.map(item => ({
             id: item.id,
             name: item.name,
             price: item.price,
@@ -402,11 +568,13 @@ async function createTransaction(req, res) {
           pix_code: qrCode,
           status: 'aguardando_pagamento',
           umbrella_transaction_id: transactionId,
-          umbrella_status: transactionData?.status || 'WAITING_PAYMENT',
+          umbrella_status: transactionStatus || 'WAITING_PAYMENT',
           umbrella_qr_code: qrCode,
           umbrella_external_ref: orderId,
           // Campo de expiração para lógica clara
           expires_at: expiresAt,
+          // ✅ Salvar qual gateway foi usado
+          gateway_used: usedGateway || 'unknown',
         };
 
         // ✅ Tentar salvar com fbc/fbp primeiro (se disponível)
@@ -454,7 +622,7 @@ async function createTransaction(req, res) {
           console.error('❌ Erro ao salvar pedido no banco:', saveError);
           // Não falhar a criação do PIX por causa do banco
         } else {
-          console.log('✅ Pedido salvo no banco:', savedOrder?.order_number);
+          console.log('✅ Pedido salvo no banco:', savedOrder?.order_number, `(Gateway: ${usedGateway})`);
         }
       } catch (dbError) {
         console.error('❌ Erro ao salvar pedido no banco:', dbError);
@@ -466,18 +634,20 @@ async function createTransaction(req, res) {
       status: 200,
       message: 'Transação PIX criada com sucesso',
       pixCode: qrCode,
+      gateway: usedGateway, // ✅ Informar qual gateway foi usado
       data: {
         id: transactionId,
         transactionId: transactionId,
         orderId: orderId,
-        status: transactionData?.status,
-        amount: transactionData?.amount,
+        status: transactionStatus,
+        amount: normalizedPrice,
         qrCode: qrCode,
         pix: {
           qrCode: qrCode,
           qrcode: qrCode,
-          copyPaste: transactionData?.pix?.copyPaste || transactionData?.copyPaste,
-          expirationDate: transactionData?.pix?.expirationDate || transactionData?.pix?.expiresAt
+          code: qrCode,
+          copyPaste: transactionResult.rawResponse?.pix?.copyPaste || qrCode,
+          expirationDate: transactionResult.rawResponse?.pix?.expirationDate || expiresAt
         }
       }
     });

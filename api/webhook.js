@@ -1,8 +1,96 @@
-// Vercel Serverless Function para receber webhook do UmbrellaPag
+// Vercel Serverless Function para receber webhook dos gateways de pagamento
+// Suporta: Novo Gateway (principal) e UmbrellaPay (fallback)
 // Rota: /api/webhook
 // ESM PURO - package.json tem "type": "module"
 
 import { supabase } from './lib/supabase.js';
+
+// Helper: Detectar qual gateway está enviando o webhook
+function detectGateway(body) {
+  // LxPay: geralmente tem transactionId no topo e estrutura diferente
+  if (body?.transactionId || body?.status === 'OK' || body?.order?.id) {
+    return 'lxpay';
+  }
+  
+  // UmbrellaPay: geralmente tem estrutura { data: { id, status, ... } }
+  if (body?.data?.id) {
+    return 'umbrellapag';
+  }
+  
+  return 'unknown';
+}
+
+// Helper: Extrair dados do novo gateway
+function parseNewGatewayWebhook(body) {
+  const transactionId = body?.transactionId || body?.order?.id;
+  const status = body?.status; // 'OK', 'PAID', etc.
+  const orderId = body?.identifier || body?.metadata?.orderId || body?.orderId;
+  const amount = body?.amount; // Já em decimal
+  const paidAt = body?.paidAt || body?.paid_at || (status === 'PAID' || status === 'OK' ? new Date().toISOString() : null);
+  const endToEndId = body?.endToEndId || body?.end_to_end_id;
+  
+  // Metadata pode vir como objeto ou string
+  let metadata = body?.metadata || {};
+  if (typeof metadata === 'string') {
+    try {
+      metadata = JSON.parse(metadata);
+    } catch (e) {
+      metadata = {};
+    }
+  }
+  
+  // Se orderId não está no metadata, tentar no topo
+  if (!orderId && metadata.orderId) {
+    metadata = { ...metadata, orderId: metadata.orderId };
+  }
+  
+  return {
+    transactionId,
+    status,
+    orderId: orderId || metadata.orderId,
+    amount,
+    paidAt,
+    endToEndId,
+    metadata,
+    raw: body
+  };
+}
+
+// Helper: Extrair dados do UmbrellaPay
+function parseUmbrellaPayWebhook(body) {
+  const data = body?.data;
+  
+  if (!data || !data.id) {
+    return null;
+  }
+  
+  const transactionId = data.id;
+  const status = data.status;
+  const paidAt = data.paidAt;
+  const endToEndId = data.endToEndId;
+  const amount = data.amount; // Em centavos
+  
+  // metadata vem como string JSON
+  let metadata = {};
+  try {
+    metadata = JSON.parse(data.metadata || '{}');
+  } catch (err) {
+    console.warn('⚠️ Falha ao parsear metadata:', data.metadata);
+  }
+  
+  const orderId = metadata.orderId;
+  
+  return {
+    transactionId,
+    status,
+    orderId,
+    amount: amount ? amount / 100 : null, // Converter centavos para decimal
+    paidAt,
+    endToEndId,
+    metadata,
+    raw: data
+  };
+}
 
 export default async function handler(req, res) {
   try {
@@ -25,34 +113,32 @@ export default async function handler(req, res) {
     }
 
     const body = req.body;
+    
+    // Detectar qual gateway está enviando
+    const gateway = detectGateway(body);
+    console.log(`📥 Webhook recebido (Gateway: ${gateway}):`, JSON.stringify(body, null, 2));
 
-    console.log('📥 Webhook recebido do UmbrellaPag:', JSON.stringify(body, null, 2));
+    let webhookData = null;
+    
+    // Parsear dados conforme o gateway
+    if (gateway === 'lxpay' || gateway === 'new_gateway') {
+      webhookData = parseNewGatewayWebhook(body);
+    } else if (gateway === 'umbrellapag') {
+      webhookData = parseUmbrellaPayWebhook(body);
+    } else {
+      console.warn('⚠️ Formato de webhook desconhecido:', body);
+      return res.status(200).json({ success: true, message: 'Webhook recebido mas formato não reconhecido' });
+    }
 
-    const data = body?.data;
-
-    // Webhook sem payload útil
-    if (!data || !data.id) {
-      console.warn('⚠️ Webhook recebido sem data válida');
+    if (!webhookData || !webhookData.transactionId) {
+      console.warn('⚠️ Webhook recebido sem transactionId válido');
       return res.status(200).json({ success: true });
     }
 
-    const transactionId = data.id;
-    const status = data.status;
-    const paidAt = data.paidAt;
-    const endToEndId = data.endToEndId;
-    const amount = data.amount;
-
-    // metadata vem como string JSON
-    let metadata = {};
-    try {
-      metadata = JSON.parse(data.metadata || '{}');
-    } catch (err) {
-      console.warn('⚠️ Falha ao parsear metadata:', data.metadata);
-    }
-
-    const orderId = metadata.orderId;
+    const { transactionId, status, orderId, amount, paidAt, endToEndId, metadata } = webhookData;
 
     console.log('📦 Dados normalizados do webhook:', {
+      gateway,
       transactionId,
       status,
       paidAt,
@@ -63,13 +149,45 @@ export default async function handler(req, res) {
 
     // Se não tiver orderId, não tem como vincular
     if (!orderId) {
-      console.warn('⚠️ Webhook sem orderId no metadata');
-      return res.status(200).json({ success: true });
+      console.warn(`⚠️ Webhook do ${gateway} sem orderId. Tentando buscar por transactionId: ${transactionId}`);
+      
+      // Tentar buscar pedido por transactionId no banco
+      if (supabase && transactionId) {
+        try {
+          const { data: orderByTx, error: findError } = await supabase
+            .from('orders')
+            .select('order_number')
+            .or(`umbrella_transaction_id.eq.${transactionId},lxpay_transaction_id.eq.${transactionId}`)
+            .single();
+          
+          if (!findError && orderByTx) {
+            webhookData.orderId = orderByTx.order_number;
+            console.log(`✅ OrderId encontrado por transactionId: ${orderByTx.order_number}`);
+          }
+        } catch (e) {
+          console.warn('⚠️ Erro ao buscar pedido por transactionId:', e);
+        }
+      }
+      
+      if (!webhookData.orderId) {
+        console.warn('⚠️ Não foi possível identificar orderId do webhook');
+        return res.status(200).json({ success: true, message: 'Webhook recebido mas sem orderId' });
+      }
     }
+    
+    const finalOrderId = webhookData.orderId || orderId;
 
+    // Normalizar status para comparação
+    const normalizedStatus = status?.toUpperCase() || '';
+    const isPaid = normalizedStatus === 'PAID' || 
+                   normalizedStatus === 'OK' || 
+                   normalizedStatus === 'CONFIRMED' || 
+                   normalizedStatus === 'PAID_OUT' ||
+                   normalizedStatus === 'PAGO';
+    
     // Se o pagamento foi confirmado (PAID)
-    if (status === 'PAID' || status === 'paid' || status === 'CONFIRMED') {
-      console.log('✅ Pagamento confirmado! Atualizando pedido e disparando Purchase...');
+    if (isPaid) {
+      console.log(`✅ Pagamento confirmado pelo ${gateway}! Atualizando pedido e disparando Purchase...`);
 
       // Buscar pedido pelo orderId (chave primária lógica)
       if (supabase) {
@@ -77,7 +195,7 @@ export default async function handler(req, res) {
           const { data: order, error: findError } = await supabase
             .from('orders')
             .select('*')
-            .eq('order_number', orderId)
+            .eq('order_number', finalOrderId)
             .single();
 
           if (findError && findError.code !== 'PGRST116') {
@@ -109,7 +227,7 @@ export default async function handler(req, res) {
                                              order.purchase_dispatched_at !== null;
             
             if (purchaseAlreadyDispatched) {
-              console.log('⏭️ [SERVER-SIDE] Purchase já foi disparado anteriormente para orderId:', orderId);
+              console.log('⏭️ [SERVER-SIDE] Purchase já foi disparado anteriormente para orderId:', finalOrderId);
             }
 
             // Atualizar pedido no banco
@@ -117,14 +235,21 @@ export default async function handler(req, res) {
               umbrella_status: status,
               umbrella_paid_at: paidAt || new Date().toISOString(),
               umbrella_end_to_end_id: endToEndId,
-              status: status === 'paid' || status === 'PAID' ? 'pago' : 'aguardando_pagamento',
+              status: 'pago',
               updated_at: new Date().toISOString()
             };
+            
+            // Adicionar campos específicos do LxPay se necessário
+            if (gateway === 'lxpay' || gateway === 'new_gateway') {
+              updateData.lxpay_transaction_id = transactionId;
+              updateData.lxpay_status = status;
+              updateData.lxpay_paid_at = paidAt || new Date().toISOString();
+            }
 
             const { data: updatedOrder, error: updateError } = await supabase
               .from('orders')
               .update(updateData)
-              .eq('order_number', orderId)
+              .eq('order_number', finalOrderId)
               .select()
               .single();
 
@@ -223,10 +348,10 @@ export default async function handler(req, res) {
                 console.error('❌ [SERVER-SIDE] Erro ao disparar Purchase para Facebook Pixel:', pixelError);
               }
             } else {
-              console.log('⏭️ [SERVER-SIDE] Purchase ignorado - já foi disparado anteriormente para orderId:', orderId);
+              console.log('⏭️ [SERVER-SIDE] Purchase ignorado - já foi disparado anteriormente para orderId:', finalOrderId);
             }
           } else {
-            console.warn('⚠️ Pedido não encontrado para orderId:', orderId);
+            console.warn('⚠️ Pedido não encontrado para orderId:', finalOrderId);
           }
         } catch (dbError) {
           console.error('❌ Erro ao processar webhook:', dbError);
@@ -238,23 +363,31 @@ export default async function handler(req, res) {
       // Atualizar pedido mesmo se não for PAID (pode ser mudança de status)
       if (supabase) {
         try {
+          const updateData = {
+            umbrella_status: status,
+            umbrella_paid_at: isPaid ? (paidAt || new Date().toISOString()) : null,
+            umbrella_end_to_end_id: endToEndId,
+            status: isPaid ? 'pago' : 'aguardando_pagamento',
+            updated_at: new Date().toISOString()
+          };
+          
+          // Adicionar campos específicos do LxPay se necessário
+          if (gateway === 'lxpay' || gateway === 'new_gateway') {
+            updateData.lxpay_transaction_id = transactionId;
+            updateData.lxpay_status = status;
+          }
+          
           const updateResult = await supabase
             .from('orders')
-            .update({
-              umbrella_status: status,
-              umbrella_paid_at: status === 'paid' || status === 'PAID' ? (paidAt || new Date().toISOString()) : null,
-              umbrella_end_to_end_id: endToEndId,
-              status: status === 'paid' || status === 'PAID' ? 'pago' : 'aguardando_pagamento',
-              updated_at: new Date().toISOString()
-            })
-            .eq('order_number', orderId)
+            .update(updateData)
+            .eq('order_number', finalOrderId)
             .select()
             .single();
 
           if (updateResult.error) {
             console.error('❌ Erro ao atualizar pedido:', updateResult.error);
           } else {
-            console.log(`💰 Pedido ${orderId} atualizado via webhook (status: ${status} → ${updateResult.data?.status || 'N/A'})`);
+            console.log(`💰 Pedido ${finalOrderId} atualizado via webhook do ${gateway} (status: ${status} → ${updateResult.data?.status || 'N/A'})`);
           }
         } catch (dbError) {
           console.error('❌ Erro ao atualizar pedido:', dbError);
@@ -262,12 +395,13 @@ export default async function handler(req, res) {
       }
     }
 
-    // Sempre retornar sucesso para o UmbrellaPag
+    // Sempre retornar sucesso para o gateway
     return res.status(200).json({
       success: true,
       received: true,
+      gateway,
       transactionId,
-      orderId,
+      orderId: finalOrderId,
       status
     });
 
