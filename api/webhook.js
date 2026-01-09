@@ -242,7 +242,7 @@ export default async function handler(req, res) {
           const { data: orderByTx, error: findError } = await supabase
             .from('orders')
             .select('order_number')
-            .or(`umbrella_transaction_id.eq.${transactionId},lxpay_transaction_id.eq.${transactionId}`)
+            .eq('umbrella_transaction_id', transactionId)
             .single();
           
           if (!findError && orderByTx) {
@@ -285,8 +285,15 @@ export default async function handler(req, res) {
             .eq('order_number', finalOrderId)
             .single();
 
-          if (findError && findError.code !== 'PGRST116') {
-            console.error('❌ Erro ao buscar pedido:', findError);
+          if (findError) {
+            if (findError.code === 'PGRST116') {
+              // Pedido não encontrado
+              console.warn('⚠️ Pedido não encontrado para orderId:', finalOrderId);
+              console.warn('   Isso pode acontecer se o pedido não foi salvo corretamente ao criar o PIX.');
+              console.warn('   Webhook recebido mas pedido não existe no banco. Ignorando atualização.');
+            } else {
+              console.error('❌ Erro ao buscar pedido:', findError);
+            }
           }
 
           if (order) {
@@ -318,6 +325,7 @@ export default async function handler(req, res) {
             }
 
             // Atualizar pedido no banco
+            // ✅ Usar campos genéricos que existem no schema (funcionam para ambos os gateways)
             const updateData = {
               umbrella_status: status,
               umbrella_paid_at: paidAt || new Date().toISOString(),
@@ -326,11 +334,10 @@ export default async function handler(req, res) {
               updated_at: new Date().toISOString()
             };
             
-            // Adicionar campos específicos do LxPay se necessário
+            // ✅ Se o transaction_id ainda não estiver salvo, atualizar (para LxPay ou UmbrellaPay)
             if (gateway === 'lxpay' || gateway === 'new_gateway') {
-              updateData.lxpay_transaction_id = transactionId;
-              updateData.lxpay_status = status;
-              updateData.lxpay_paid_at = paidAt || new Date().toISOString();
+              // Usar o campo genérico umbrella_transaction_id para ambos os gateways
+              updateData.umbrella_transaction_id = transactionId;
             }
 
             const { data: updatedOrder, error: updateError } = await supabase
@@ -458,10 +465,10 @@ export default async function handler(req, res) {
             updated_at: new Date().toISOString()
           };
           
-          // Adicionar campos específicos do LxPay se necessário
+          // ✅ Se o transaction_id ainda não estiver salvo, atualizar (para LxPay ou UmbrellaPay)
+          // Usar o campo genérico umbrella_transaction_id para ambos os gateways
           if (gateway === 'lxpay' || gateway === 'new_gateway') {
-            updateData.lxpay_transaction_id = transactionId;
-            updateData.lxpay_status = status;
+            updateData.umbrella_transaction_id = transactionId;
           }
           
           const updateResult = await supabase

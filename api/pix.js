@@ -571,10 +571,7 @@ async function createTransaction(req, res) {
           umbrella_status: transactionStatus || 'WAITING_PAYMENT',
           umbrella_qr_code: qrCode,
           umbrella_external_ref: orderId,
-          // Campo de expiração para lógica clara
-          expires_at: expiresAt,
-          // ✅ Salvar qual gateway foi usado
-          gateway_used: usedGateway || 'unknown',
+          // ✅ Campos gateway_used e expires_at removidos - não existem no schema do banco
         };
 
         // ✅ Tentar salvar com fbc/fbp primeiro (se disponível)
@@ -598,18 +595,26 @@ async function createTransaction(req, res) {
         savedOrder = data;
         saveError = error;
 
-        // Se falhar e tiver tentado com fbc/fbp, tentar sem
-        if (saveError && (fbc || fbp)) {
+        // Se falhar, tentar remover campos que podem não existir no banco
+        if (saveError) {
           const errorMessage = saveError.message || '';
-          if (errorMessage.includes('facebook_fbc') || errorMessage.includes('facebook_fbp')) {
-            console.warn('⚠️ Colunas facebook_fbc/fbp não existem no banco. Tentando salvar sem elas...');
-            const orderDataWithoutFb = { ...orderData };
-            delete orderDataWithoutFb.facebook_fbc;
-            delete orderDataWithoutFb.facebook_fbp;
+          
+          // Lista de campos opcionais que podem não existir no schema
+          const optionalFields = ['facebook_fbc', 'facebook_fbp', 'gateway_used', 'expires_at'];
+          const missingFields = optionalFields.filter(field => 
+            errorMessage.toLowerCase().includes(field.toLowerCase())
+          );
+          
+          if (missingFields.length > 0) {
+            console.warn(`⚠️ Colunas ${missingFields.join(', ')} não existem no banco. Tentando salvar sem elas...`);
+            const orderDataCleaned = { ...orderData };
+            missingFields.forEach(field => {
+              delete orderDataCleaned[field];
+            });
             
             const { data: dataRetry, error: errorRetry } = await supabase
               .from('orders')
-              .insert(orderDataWithoutFb)
+              .insert(orderDataCleaned)
               .select()
               .single();
             
