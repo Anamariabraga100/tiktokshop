@@ -31,9 +31,6 @@ export const CardPaymentModal = ({ isOpen, onClose }: CardPaymentModalProps) => 
   // Calcular valor final (MESMA LÓGICA DO CARTDRAWER)
   const safeTotalPrice = totalPrice || 0;
   
-  // ✅ Frete sempre grátis (sem pedido mínimo)
-  const hasFreeShippingCalculated = true;
-  
   // Outros cupons percentuais são aplicados se ativos
   const applicableCoupon = getApplicableCoupon(safeTotalPrice);
   const otherCouponDiscount = applicableCoupon && applicableCoupon.id !== '4'
@@ -47,8 +44,14 @@ export const CardPaymentModal = ({ isOpen, onClose }: CardPaymentModalProps) => 
   // Cartão NÃO tem desconto adicional (diferente do PIX)
   const priceAfterCard = priceAfterCoupon;
   
-  // ✅ Frete sempre grátis (sem pedido mínimo)
-  const shippingPrice = 0;
+  // Limite para frete grátis + brinde
+  const FREE_SHIPPING_THRESHOLD = 30;
+  const SHIPPING_PRICE = 7.90;
+
+  // Calcular frete: R$30 = frete grátis + brinde, abaixo = R$7,90
+  const hasFreeShippingCalculated = priceAfterCoupon >= FREE_SHIPPING_THRESHOLD;
+  const hasGift = hasFreeShippingCalculated;
+  const shippingPrice = hasFreeShippingCalculated ? 0 : SHIPPING_PRICE;
   
   // Valor final incluindo frete (IMPORTANTE: deve incluir frete como no CartDrawer)
   const finalPrice = priceAfterCard + shippingPrice;

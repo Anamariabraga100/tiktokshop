@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Minus, Plus, Trash2, ArrowLeft, Truck, Clock, Ticket, Star, CheckCircle2, FileText, Gift, QrCode, CreditCard, DollarSign, Sparkles } from 'lucide-react';
+import { X, Minus, Plus, Trash2, ArrowLeft, Truck, Clock, Ticket, Star, CheckCircle2, FileText, Gift, QrCode, CreditCard, DollarSign } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import { useCoupons } from '@/context/CouponContext';
 import { useCustomer } from '@/context/CustomerContext';
@@ -10,7 +10,6 @@ import { PixPaymentModal } from './PixPaymentModal';
 import { CardPaymentModal } from './CardPaymentModal';
 import { toast } from 'sonner';
 import { trackInitiateCheckout } from '@/lib/facebookPixel';
-import { getBestBundleOffer, calculateBundlePrice, getAllBundleOffers, BundleOffer } from '@/lib/bundleCalculator';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -41,45 +40,31 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
   const [showPixModal, setShowPixModal] = useState(false);
   const [showCardModal, setShowCardModal] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'pix' | 'card'>('pix');
-  const [selectedBundleQuantity, setSelectedBundleQuantity] = useState<number | null>(null);
+  // Limite para frete grátis + brinde
+  const FREE_SHIPPING_THRESHOLD = 30;
+  const SHIPPING_PRICE = 7.90;
 
-  // ✅ Frete sempre grátis (sem pedido mínimo)
-  const hasFreeShipping = true;
-  
-  // ✅ Calcular total com descontos de bundle aplicados
-  const totalPriceWithBundles = useMemo(() => {
-    return items.reduce((sum, item) => {
-      const bundlePrice = calculateBundlePrice(item.price, item.quantity);
-      return sum + bundlePrice;
-    }, 0);
-  }, [items]);
-  
-  // Usar o total com bundle ao invés do totalPrice simples
-  const effectiveTotalPrice = totalPriceWithBundles > 0 ? totalPriceWithBundles : totalPrice;
-
-  // Outros cupons percentuais são aplicados se ativos (usar effectiveTotalPrice)
-  const applicableCoupon = getApplicableCoupon(effectiveTotalPrice);
+  // Outros cupons percentuais são aplicados se ativos
+  const applicableCoupon = getApplicableCoupon(totalPrice);
   const otherCouponDiscount = applicableCoupon && applicableCoupon.id !== '4'
-    ? (effectiveTotalPrice * applicableCoupon.discountPercent) / 100
+    ? (totalPrice * applicableCoupon.discountPercent) / 100
     : 0;
   
   // Total de desconto de cupons (sem desconto de primeira compra)
   const couponDiscount = otherCouponDiscount;
-  const priceAfterCoupon = effectiveTotalPrice - couponDiscount;
+  const priceAfterCoupon = totalPrice - couponDiscount;
   
   // PIX não tem desconto adicional
   const pixDiscount = 0;
   const priceAfterPix = priceAfterCoupon;
 
-  // Calculate original total and savings (usar effectiveTotalPrice para considerar bundles)
+  // Calculate original total and savings
   const originalTotal = items.reduce((sum, item) => {
-    // Preço original sem desconto de bundle (preço unitário * quantidade)
     return sum + (item.originalPrice || item.price) * item.quantity;
   }, 0);
   
-  const bundleDiscount = totalPrice - totalPriceWithBundles;
   const productDiscount = originalTotal - totalPrice; // Desconto do preço original do produto
-  const totalSavings = bundleDiscount + productDiscount + couponDiscount + pixDiscount;
+  const totalSavings = productDiscount + couponDiscount + pixDiscount;
 
   const formatCouponTime = (ms: number) => {
     const hours = Math.floor(ms / 3600000);
@@ -89,14 +74,16 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
   };
 
   // Calcular previsão de entrega (5-7 dias úteis) e frete
-  const { deliveryInfo, shippingPrice, formattedShippingPrice } = useMemo(() => {
+  const { deliveryInfo, shippingPrice, formattedShippingPrice, hasFreeShipping, hasGift } = useMemo(() => {
     // ✅ Mostrar frete apenas depois de preencher informações de entrega
     if (!hasAddress) {
       // Sem endereço, não mostrar valor do frete
       return { 
         deliveryInfo: null, 
         shippingPrice: 0, // Não incluir no cálculo até preencher endereço
-        formattedShippingPrice: '—' // Mostrar traço indicando que precisa preencher
+        formattedShippingPrice: '—', // Mostrar traço indicando que precisa preencher
+        hasFreeShipping: false,
+        hasGift: false
       };
     }
 
@@ -141,18 +128,22 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
     const monthName = maxDate.toLocaleDateString('pt-BR', { month: 'long' });
     const month = monthName.charAt(0).toUpperCase() + monthName.slice(1);
     
-    // ✅ Frete sempre grátis (sem pedido mínimo)
-    const price = 0;
-    localStorage.setItem('currentShippingPrice', '0');
+    // Calcular frete: R$30 = frete grátis + brinde, abaixo = R$7,90
+    const hasFreeShipping = priceAfterCoupon >= FREE_SHIPPING_THRESHOLD;
+    const hasGift = hasFreeShipping;
+    const price = hasFreeShipping ? 0 : SHIPPING_PRICE;
+    localStorage.setItem('currentShippingPrice', price.toString());
     
-    const formatted = price.toFixed(2).replace('.', ',');
+    const formatted = hasFreeShipping ? 'Grátis' : price.toFixed(2).replace('.', ',');
     
     return {
       deliveryInfo: { minDay, maxDay, month, minDate, maxDate },
       shippingPrice: price,
-      formattedShippingPrice: formatted
+      formattedShippingPrice: formatted,
+      hasFreeShipping,
+      hasGift
     };
-  }, [hasAddress, effectiveTotalPrice, hasFreeShipping]);
+  }, [hasAddress, priceAfterCoupon]);
 
   // Calcular preço final incluindo frete
   const finalPrice = priceAfterPix + shippingPrice;
@@ -160,8 +151,6 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
   // Debug: Log dos cálculos
   console.log('🛒 CartDrawer - Cálculo de valores:', {
     totalPrice,
-    totalPriceWithBundles,
-    effectiveTotalPrice,
     otherCouponDiscount,
     couponDiscount,
     priceAfterCoupon,
@@ -288,13 +277,6 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
     (item.soldCount || 0) > (best.soldCount || 0) ? item : best
   ) : null;
 
-  // Reset seleção de bundle se não deve mais mostrar
-  useEffect(() => {
-    const shouldShowBundle = items.length === 1 && items[0].quantity === 1;
-    if (!shouldShowBundle) {
-      setSelectedBundleQuantity(null);
-    }
-  }, [items]);
 
   return (
     <>
@@ -409,112 +391,6 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                       )}
                     </div>
 
-                    {/* Bundle Offers - Box fixo com ambas opções */}
-                    {(() => {
-                      const regularItems = items;
-                      // Mostrar bundle apenas se houver exatamente 1 produto com quantity = 1
-                      const shouldShowBundle = regularItems.length === 1 && regularItems[0].quantity === 1;
-                      
-                      if (!shouldShowBundle) return null;
-                      
-                      const item = items[0];
-                      const bundleOffers = getAllBundleOffers(item.price);
-                      
-                      return (
-                        <div className="bg-white rounded-xl border-2 border-primary/40 p-5 shadow-md">
-                          <div className="flex items-center gap-3 mb-5">
-                            <Sparkles className="w-6 h-6 text-primary flex-shrink-0" />
-                            <h3 className="text-lg font-bold text-foreground leading-tight">
-                              Leve mais unidades e economize (frete grátis)
-                            </h3>
-                          </div>
-                          
-                          <div className="space-y-4">
-                            {/* Opções de bundle com radio buttons */}
-                            <div className="space-y-3">
-                              {bundleOffers.map((offer) => {
-                                const isSelected = selectedBundleQuantity === offer.quantity;
-                                const isBest = offer.quantity === 3; // Destacar opção de 3 unidades
-                                
-                                return (
-                                  <label
-                                    key={offer.quantity}
-                                    className={`
-                                      flex items-start gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all
-                                      ${isSelected 
-                                        ? 'border-primary bg-primary/10 shadow-lg' 
-                                        : 'border-border bg-gray-50/50 hover:border-primary/70 hover:bg-gray-50 hover:shadow-md'
-                                      }
-                                      ${isBest ? 'ring-2 ring-success/50' : ''}
-                                    `}
-                                  >
-                                    <input
-                                      type="radio"
-                                      name="bundle-selection"
-                                      value={offer.quantity}
-                                      checked={isSelected}
-                                      onChange={() => setSelectedBundleQuantity(offer.quantity)}
-                                      className="mt-1 w-5 h-5 text-primary border-2 border-gray-300 focus:ring-2 focus:ring-primary focus:ring-offset-2 cursor-pointer"
-                                    />
-                                    <div className="flex-1 min-w-0">
-                                      <div className="flex items-center justify-between gap-3 mb-2">
-                                        <p className="text-lg font-bold text-gray-900 leading-snug">
-                                          {offer.quantity} unidades por R$ {offer.totalPrice.toFixed(2).replace('.', ',')}
-                                        </p>
-                                        {isBest && (
-                                          <span className="text-xs px-3 py-1.5 bg-success text-white font-bold rounded-full whitespace-nowrap flex-shrink-0 shadow-sm">
-                                            Melhor
-                                          </span>
-                                        )}
-                                      </div>
-                                      <p className="text-base text-success font-bold leading-relaxed">
-                                        {offer.quantity === 2 
-                                          ? `Economize R$ ${offer.savings.toFixed(2).replace('.', ',')}`
-                                          : offer.helperText
-                                        }
-                                      </p>
-                                    </div>
-                                  </label>
-                                );
-                              })}
-                            </div>
-                            
-                            {/* Botão CTA secundário */}
-                            <div className="space-y-2">
-                              <button
-                                onClick={() => {
-                                  if (!selectedBundleQuantity) {
-                                    toast.error('Selecione uma opção primeiro');
-                                    return;
-                                  }
-                                  
-                                  const selectedOffer = bundleOffers.find(o => o.quantity === selectedBundleQuantity);
-                                  if (!selectedOffer) return;
-                                  
-                                  updateQuantity(item.id, selectedBundleQuantity);
-                                  setSelectedBundleQuantity(null); // Reset seleção
-                                  toast.success(
-                                    `${selectedOffer.quantity} unidades adicionadas! Você economizou R$ ${selectedOffer.savings.toFixed(2).replace('.', ',')}`,
-                                    { duration: 3000 }
-                                  );
-                                }}
-                                disabled={!selectedBundleQuantity}
-                                className="w-full py-3.5 px-4 bg-white border-2 border-primary text-primary rounded-xl font-bold text-base hover:bg-primary/10 hover:border-primary hover:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:border-gray-300 disabled:text-gray-400 shadow-sm"
-                              >
-                                {selectedBundleQuantity 
-                                  ? `Adicionar ${selectedBundleQuantity} unidades ao pedido`
-                                  : 'Aplicar oferta'
-                                }
-                              </button>
-                              {/* Microcopy de segurança */}
-                              <p className="text-xs text-gray-500 text-center leading-relaxed">
-                                Você pode ajustar a quantidade depois, se quiser
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })()}
 
                     {/* Product Section */}
                     <div className="bg-card rounded-xl border border-border p-4">
@@ -584,40 +460,19 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                                 </div>
 
                                 <div className="flex items-center gap-2 mb-2">
-                                  {/* Mostrar preço com desconto de bundle se aplicável */}
-                                  {(() => {
-                                    const bundlePrice = calculateBundlePrice(item.price, item.quantity);
-                                    const regularPrice = item.price * item.quantity;
-                                    const hasBundleDiscount = bundlePrice < regularPrice;
-                                    
-                                    return (
-                                      <>
-                                        <span className="text-base font-bold text-foreground">
-                                          R$ {bundlePrice.toFixed(2).replace('.', ',')}
-                                        </span>
-                                        {hasBundleDiscount && (
-                                          <>
-                                            <span className="text-xs text-muted-foreground line-through">
-                                              R$ {regularPrice.toFixed(2).replace('.', ',')}
-                                            </span>
-                                            <span className="text-xs px-1.5 py-0.5 bg-success/20 text-success rounded font-semibold">
-                                              Bundle
-                                            </span>
-                                          </>
-                                        )}
-                                        {!hasBundleDiscount && item.originalPrice && item.originalPrice > item.price && (
-                                          <>
-                                            <span className="text-xs text-muted-foreground line-through">
-                                              R$ {item.originalPrice.toFixed(2).replace('.', ',')}
-                                            </span>
-                                            <span className="text-xs px-1.5 py-0.5 bg-primary/10 text-primary rounded font-semibold">
-                                              -{itemDiscountPercent}%
-                                            </span>
-                                          </>
-                                        )}
-                                      </>
-                                    );
-                                  })()}
+                                  <span className="text-base font-bold text-foreground">
+                                    R$ {(item.price * item.quantity).toFixed(2).replace('.', ',')}
+                                  </span>
+                                  {item.originalPrice && item.originalPrice > item.price && (
+                                    <>
+                                      <span className="text-xs text-muted-foreground line-through">
+                                        R$ {item.originalPrice.toFixed(2).replace('.', ',')}
+                                      </span>
+                                      <span className="text-xs px-1.5 py-0.5 bg-primary/10 text-primary rounded font-semibold">
+                                        -{itemDiscountPercent}%
+                                      </span>
+                                    </>
+                                  )}
                                 </div>
 
                                 <div className="flex items-center justify-between">
@@ -692,18 +547,10 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                       <div className="space-y-2 text-sm">
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Subtotal do produto</span>
-                          <span className="font-medium">R$ {effectiveTotalPrice.toFixed(2).replace('.', ',')}</span>
+                          <span className="font-medium">R$ {totalPrice.toFixed(2).replace('.', ',')}</span>
                         </div>
                         
-                        {/* Mostrar desconto de bundle se houver */}
-                        {totalPriceWithBundles < totalPrice && (
-                          <div className="flex justify-between text-success">
-                            <span>Desconto Bundle (Leve mais, pague menos)</span>
-                            <span className="font-medium">- R$ {(totalPrice - totalPriceWithBundles).toFixed(2).replace('.', ',')}</span>
-                          </div>
-                        )}
-                        
-                        {originalTotal > effectiveTotalPrice && (
+                        {originalTotal > totalPrice && (
                           <>
                             <div className="flex justify-between">
                               <span className="text-muted-foreground">Preço original</span>
@@ -711,7 +558,7 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                             </div>
                             <div className="flex justify-between text-success">
                               <span>Desconto no produto</span>
-                              <span className="font-medium">- R$ {(originalTotal - effectiveTotalPrice).toFixed(2).replace('.', ',')}</span>
+                              <span className="font-medium">- R$ {(originalTotal - totalPrice).toFixed(2).replace('.', ',')}</span>
                             </div>
                           </>
                         )}
@@ -735,9 +582,24 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Frete</span>
                           <span className="font-medium">
-                            <span className="text-success">Grátis</span>
+                            {hasFreeShipping ? (
+                              <span className="text-success">Grátis</span>
+                            ) : (
+                              <span>R$ {shippingPrice.toFixed(2).replace('.', ',')}</span>
+                            )}
                           </span>
                         </div>
+                        
+                        {/* Brinde quando atingir R$30 */}
+                        {hasGift && (
+                          <div className="flex justify-between text-success">
+                            <span className="flex items-center gap-1">
+                              <Gift className="w-4 h-4" />
+                              Brinde incluído
+                            </span>
+                            <span className="font-medium">Grátis</span>
+                          </div>
+                        )}
                       </div>
 
                       <div className="mt-4 pt-4 border-t border-border">
@@ -748,10 +610,12 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                         <p className="text-xs text-muted-foreground">Impostos inclusos</p>
                       </div>
 
-                      {bundleDiscount > 0 && (
-                        <div className="mt-3 p-3 bg-success/10 rounded-lg border border-success/20">
-                          <p className="text-sm font-medium text-success flex items-center gap-1">
-                            💰 Você economizou R$ {bundleDiscount.toFixed(2).replace('.', ',')} ao levar mais unidades
+                      {/* Mensagem de frete grátis + brinde */}
+                      {priceAfterCoupon < FREE_SHIPPING_THRESHOLD && (
+                        <div className="mt-3 p-3 bg-primary/10 rounded-lg border border-primary/20">
+                          <p className="text-sm font-medium text-primary flex items-center gap-1">
+                            <Truck className="w-4 h-4" />
+                            Faltam R$ {(FREE_SHIPPING_THRESHOLD - priceAfterCoupon).toFixed(2).replace('.', ',')} para frete grátis + brinde!
                           </p>
                         </div>
                       )}
@@ -918,35 +782,14 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                 Resumo da sua economia neste pedido
               </AlertDialogTitle>
               
-              {/* Mostrar apenas economia do bundle (se houver) */}
-              {bundleDiscount > 0 ? (
-                <div className="space-y-2">
-                  <p className="text-3xl md:text-4xl font-bold text-success leading-none">
-                    R$ {bundleDiscount.toFixed(2).replace('.', ',')}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    Economia ao levar mais unidades
-                  </p>
-                </div>
-              ) : (
-                <div>
-                  <p className="text-3xl md:text-4xl font-bold text-primary leading-none">
-                    R$ {effectiveTotalPrice.toFixed(2).replace('.', ',')}
-                  </p>
-                  <p className="text-sm text-muted-foreground mt-2">
-                    Finalize sua compra agora
-                  </p>
-                </div>
-              )}
-              
-              {/* Mensagem de apoio neutra */}
-              {bundleDiscount > 0 && (
-                <div className="pt-2">
-                  <p className="text-sm text-muted-foreground leading-relaxed">
-                    Finalize agora para manter essa economia aplicada ao seu pedido.
-                  </p>
-                </div>
-              )}
+              <div>
+                <p className="text-3xl md:text-4xl font-bold text-primary leading-none">
+                  R$ {totalPrice.toFixed(2).replace('.', ',')}
+                </p>
+                <p className="text-sm text-muted-foreground mt-2">
+                  Finalize sua compra agora
+                </p>
+              </div>
             </div>
           </AlertDialogHeader>
 
@@ -1043,3 +886,4 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
     </>
   );
 };
+

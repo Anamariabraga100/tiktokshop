@@ -359,50 +359,6 @@ async function createTransaction(req, res) {
     const normalizedPhone = customer.phone?.replace(/\D/g, '') || '11999999999';
     const phone = normalizedPhone.length >= 10 ? normalizedPhone : '11999999999';
 
-    // ✅ Rate limiting: Verificar se já existe pedido recente para este CPF (últimos 5 minutos)
-    if (supabase) {
-      try {
-        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-        
-        const { data: recentOrders, error: checkError } = await supabase
-          .from('orders')
-          .select('order_number, created_at')
-          .eq('customer_cpf', normalizedCPF)
-          .gte('created_at', fiveMinutesAgo)
-          .order('created_at', { ascending: false })
-          .limit(1);
-
-        if (checkError) {
-          console.warn('⚠️ Erro ao verificar pedidos recentes:', checkError);
-          // Continuar mesmo com erro (não bloquear por causa de erro de consulta)
-        } else if (recentOrders && recentOrders.length > 0) {
-          const lastOrder = recentOrders[0];
-          const lastOrderTime = new Date(lastOrder.created_at);
-          const timeDiff = Date.now() - lastOrderTime.getTime();
-          const minutesRemaining = Math.ceil((5 * 60 * 1000 - timeDiff) / (60 * 1000));
-          
-          console.warn('⏱️ Rate limit: Pedido recente encontrado para este CPF:', {
-            lastOrder: lastOrder.order_number,
-            lastOrderTime: lastOrder.created_at,
-            minutesRemaining: minutesRemaining
-          });
-
-          return res.status(429).json({
-            success: false,
-            error: `Você já criou um pedido recentemente. Aguarde ${minutesRemaining} minuto(s) antes de criar um novo pedido.`,
-            rateLimit: {
-              lastOrder: lastOrder.order_number,
-              waitMinutes: minutesRemaining,
-              retryAfter: Math.ceil((5 * 60 * 1000 - timeDiff) / 1000) // segundos
-            }
-          });
-        }
-      } catch (rateLimitError) {
-        console.warn('⚠️ Erro ao verificar rate limit:', rateLimitError);
-        // Continuar mesmo com erro (não bloquear por causa de erro de consulta)
-      }
-    }
-
     // ✅ Validar CPF antes de criar customer
     if (normalizedCPF.length !== 11) {
       return res.status(400).json({

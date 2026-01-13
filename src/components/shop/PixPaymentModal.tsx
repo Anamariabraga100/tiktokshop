@@ -53,10 +53,14 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
   // PIX não tem desconto adicional
   const pixDiscount = 0;
 
-  // ✅ Frete sempre grátis (sem pedido mínimo)
-  const hasFreeShipping = true;
-  // ✅ Mostrar frete apenas depois de preencher informações de entrega
-  const shippingPrice = 0; // Sempre grátis
+  // Limite para frete grátis + brinde
+  const FREE_SHIPPING_THRESHOLD = 30;
+  const SHIPPING_PRICE = 7.90;
+
+  // Calcular frete: R$30 = frete grátis + brinde, abaixo = R$7,90
+  const hasFreeShipping = priceAfterCoupon >= FREE_SHIPPING_THRESHOLD;
+  const hasGift = hasFreeShipping;
+  const shippingPrice = hasFreeShipping ? 0 : SHIPPING_PRICE;
   
   // Calcular valor final incluindo frete
   const finalPrice = priceAfterCoupon + shippingPrice;
