@@ -87,6 +87,14 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
       };
     }
 
+    // Calcular frete baseado no valor após cupons (mesmo cálculo usado no resto do código)
+    // Precisamos calcular o couponDiscount aqui também para manter consistência
+    const applicableCouponForShipping = getApplicableCoupon(totalPrice);
+    const couponDiscountForShipping = applicableCouponForShipping && applicableCouponForShipping.id !== '4'
+      ? (totalPrice * applicableCouponForShipping.discountPercent) / 100
+      : 0;
+    const currentPriceAfterCoupon = totalPrice - couponDiscountForShipping;
+
     // Calcular intervalo de entrega (5-7 dias úteis a partir de hoje)
     const today = new Date();
     const minDays = 5;
@@ -129,21 +137,21 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
     const month = monthName.charAt(0).toUpperCase() + monthName.slice(1);
     
     // Calcular frete: R$30 = frete grátis + brinde, abaixo = R$7,90
-    const hasFreeShipping = priceAfterCoupon >= FREE_SHIPPING_THRESHOLD;
-    const hasGift = hasFreeShipping;
-    const price = hasFreeShipping ? 0 : SHIPPING_PRICE;
-    localStorage.setItem('currentShippingPrice', price.toString());
+    const calculatedFreeShipping = currentPriceAfterCoupon >= FREE_SHIPPING_THRESHOLD;
+    const calculatedGift = calculatedFreeShipping;
+    const calculatedPrice = calculatedFreeShipping ? 0 : SHIPPING_PRICE;
+    localStorage.setItem('currentShippingPrice', calculatedPrice.toString());
     
-    const formatted = hasFreeShipping ? 'Grátis' : price.toFixed(2).replace('.', ',');
+    const formatted = calculatedFreeShipping ? 'Grátis' : calculatedPrice.toFixed(2).replace('.', ',');
     
     return {
       deliveryInfo: { minDay, maxDay, month, minDate, maxDate },
-      shippingPrice: price,
+      shippingPrice: calculatedPrice,
       formattedShippingPrice: formatted,
-      hasFreeShipping,
-      hasGift
+      hasFreeShipping: calculatedFreeShipping,
+      hasGift: calculatedGift
     };
-  }, [hasAddress, priceAfterCoupon]);
+  }, [hasAddress, totalPrice, getApplicableCoupon]);
 
   // Calcular preço final incluindo frete
   const finalPrice = priceAfterPix + shippingPrice;
@@ -520,9 +528,35 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                               </div>
                             </div>
                             <div className="text-right">
-                              <span className="text-sm font-bold text-success">Grátis</span>
+                              {hasFreeShipping ? (
+                                <span className="text-sm font-bold text-success">Grátis</span>
+                              ) : (
+                                <span className="text-sm font-bold">R$ {shippingPrice.toFixed(2).replace('.', ',')}</span>
+                              )}
                             </div>
                           </div>
+                          
+                          {/* Barra de progresso para frete grátis */}
+                          {!hasFreeShipping && (
+                            <div className="space-y-2 pt-2 border-t border-border">
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-muted-foreground">
+                                  Faltam R$ {(FREE_SHIPPING_THRESHOLD - priceAfterCoupon).toFixed(2).replace('.', ',')} para frete grátis + brinde
+                                </span>
+                                <span className="font-semibold text-primary">
+                                  {Math.min(100, Math.round((priceAfterCoupon / FREE_SHIPPING_THRESHOLD) * 100))}%
+                                </span>
+                              </div>
+                              <div className="w-full bg-muted rounded-full h-2.5 overflow-hidden">
+                                <div 
+                                  className="h-full bg-gradient-to-r from-primary to-tiktok-pink rounded-full transition-all duration-300 ease-out"
+                                  style={{ 
+                                    width: `${Math.min(100, Math.round((priceAfterCoupon / FREE_SHIPPING_THRESHOLD) * 100))}%` 
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}
@@ -610,15 +644,6 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                         <p className="text-xs text-muted-foreground">Impostos inclusos</p>
                       </div>
 
-                      {/* Mensagem de frete grátis + brinde */}
-                      {priceAfterCoupon < FREE_SHIPPING_THRESHOLD && (
-                        <div className="mt-3 p-3 bg-primary/10 rounded-lg border border-primary/20">
-                          <p className="text-sm font-medium text-primary flex items-center gap-1">
-                            <Truck className="w-4 h-4" />
-                            Faltam R$ {(FREE_SHIPPING_THRESHOLD - priceAfterCoupon).toFixed(2).replace('.', ',')} para frete grátis + brinde!
-                          </p>
-                        </div>
-                      )}
 
                     </div>
 
