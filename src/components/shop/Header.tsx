@@ -48,6 +48,13 @@ export const Header = ({ onCartClick, onCategorySelect, onCouponsClick, onTabCli
         className="sticky top-0 bg-card/95 backdrop-blur-sm z-40 border-b border-border will-change-transform"
       >
         <div className="flex items-center justify-between px-4 py-3 md:px-6 md:py-4 max-w-7xl mx-auto">
+          {/* Logo TikTok Shop - Apenas texto */}
+          <div className="flex-shrink-0 mr-3 md:mr-4">
+            <div className="flex flex-col">
+              <span className="text-base md:text-lg font-bold leading-tight text-foreground">TikTok</span>
+              <span className="text-xs md:text-sm font-medium leading-tight text-foreground">Shop</span>
+            </div>
+          </div>
           {/* Tabs */}
           <div className="flex items-center gap-3 md:gap-4 lg:gap-6 overflow-x-auto scrollbar-hide flex-1">
             {tabs.map((tab) => (

@@ -10,6 +10,7 @@ import { CustomerProvider } from "./context/CustomerContext";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import ThankYou from "./pages/ThankYou";
+import ProductPage from "./pages/ProductPage";
 import { initFacebookPixel, trackPageView } from "./lib/facebookPixel";
 
 const queryClient = new QueryClient();
@@ -48,7 +49,7 @@ const App = () => (
             <BrowserRouter>
               <Routes>
                 <Route path="/" element={<Index />} />
-                <Route path="/produto/:id" element={<Index />} />
+                <Route path="/produto/:id" element={<ProductPage />} />
                 <Route path="/thank-you" element={<ThankYou />} />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<NotFound />} />

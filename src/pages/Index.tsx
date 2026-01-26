@@ -7,7 +7,6 @@ import { CategoryScroll } from '@/components/shop/CategoryScroll';
 import { QuickActions } from '@/components/shop/QuickActions';
 import { PromoBanner } from '@/components/shop/PromoBanner';
 import { ProductSection, HorizontalProductScroll } from '@/components/shop/ProductSection';
-import { ProductDrawer } from '@/components/shop/ProductDrawer';
 import { CartDrawer } from '@/components/shop/CartDrawer';
 import { CouponsDrawer } from '@/components/shop/CouponsDrawer';
 import { HelpDrawer } from '@/components/shop/HelpDrawer';
@@ -35,8 +34,6 @@ const Index = () => {
   const location = useLocation();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [isProductDrawerOpen, setIsProductDrawerOpen] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCouponsOpen, setIsCouponsOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
@@ -47,29 +44,6 @@ const Index = () => {
   const [sortOption, setSortOption] = useState<SortOption>('default');
   const { totalItems } = useCart();
 
-  // Verificar se há ID de produto na URL e abrir automaticamente
-  useEffect(() => {
-    const pathParts = location.pathname.split('/').filter(Boolean);
-    
-    // Se a URL for /produto/:id, abrir o produto
-    if (pathParts[0] === 'produto' && pathParts[1]) {
-      const productIdFromUrl = pathParts[1];
-      const product = products.find(p => p.id === productIdFromUrl);
-      if (product && product.id !== selectedProduct?.id) {
-        setSelectedProduct(product);
-        setIsProductDrawerOpen(true);
-      } else if (!product) {
-        // Produto não encontrado, redirecionar para home
-        navigate('/', { replace: true });
-      }
-    } else if (pathParts.length === 0 || pathParts[0] === '') {
-      // Se estiver na home e houver produto aberto, fechar
-      if (selectedProduct && isProductDrawerOpen) {
-        setSelectedProduct(null);
-        setIsProductDrawerOpen(false);
-      }
-    }
-  }, [location.pathname, selectedProduct, isProductDrawerOpen, navigate]);
 
   // Handle tab changes
   useEffect(() => {
@@ -221,17 +195,10 @@ const Index = () => {
       window.open(product.url, '_blank', 'noopener,noreferrer');
       return;
     }
-    // Atualizar URL para o produto
+    // Navegar para a página de produto
     navigate(`/produto/${product.id}`, { replace: false });
-    // Abrir o drawer
-    setSelectedProduct(product);
-    setIsProductDrawerOpen(true);
   };
 
-  const handleBuyNow = () => {
-    setIsProductDrawerOpen(false);
-    setIsCartOpen(true);
-  };
 
   const scrollToOffers = () => {
     // Se estiver na aba home, rola para ofertas, senão muda para aba de ofertas
@@ -448,19 +415,6 @@ const Index = () => {
         cartCount={totalItems}
         onCartClick={() => setIsCartOpen(true)}
         onCouponsClick={() => setIsCouponsOpen(true)}
-      />
-      <ProductDrawer 
-        product={selectedProduct} 
-        isOpen={isProductDrawerOpen} 
-        onClose={() => {
-          setIsProductDrawerOpen(false);
-          // Limpar URL quando fechar o drawer
-          if (location.pathname.startsWith('/produto/')) {
-            navigate('/', { replace: true });
-          }
-        }} 
-        onBuyNow={handleBuyNow}
-        onProductClick={handleProductClick}
       />
       <CartDrawer isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} />
       <CouponsDrawer isOpen={isCouponsOpen} onClose={() => setIsCouponsOpen(false)} />

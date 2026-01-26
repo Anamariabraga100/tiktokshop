@@ -25,6 +25,7 @@ export interface Product {
   price: number;
   originalPrice?: number;
   image: string;
+  images?: string[]; // Múltiplas imagens do produto
   rating: number;
   soldCount: number;
   viewCount?: number;

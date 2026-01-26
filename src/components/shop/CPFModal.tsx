@@ -28,102 +28,17 @@ export const CPFModal = ({ isOpen, onClose, onAddCPF }: CPFModalProps) => {
     return value;
   };
 
-  /**
-   * Valida CPF brasileiro
-   * Verifica dígitos verificadores e regras de validação
-   */
-  const validateCPF = (cpfString: string): boolean => {
-    const cpfNumbers = cpfString.replace(/\D/g, '');
-    
-    // Deve ter 11 dígitos
-    if (cpfNumbers.length !== 11) {
-      return false;
-    }
-    
-    // Rejeitar CPFs com todos os dígitos iguais (000.000.000-00, 111.111.111-11, etc)
-    if (/^(\d)\1{10}$/.test(cpfNumbers)) {
-      return false;
-    }
-    
-    // Calcular primeiro dígito verificador
-    let sum = 0;
-    for (let i = 0; i < 9; i++) {
-      sum += parseInt(cpfNumbers.charAt(i)) * (10 - i);
-    }
-    let remainder = (sum * 10) % 11;
-    if (remainder === 10 || remainder === 11) remainder = 0;
-    if (remainder !== parseInt(cpfNumbers.charAt(9))) {
-      return false;
-    }
-    
-    // Calcular segundo dígito verificador
-    sum = 0;
-    for (let i = 0; i < 10; i++) {
-      sum += parseInt(cpfNumbers.charAt(i)) * (11 - i);
-    }
-    remainder = (sum * 10) % 11;
-    if (remainder === 10 || remainder === 11) remainder = 0;
-    if (remainder !== parseInt(cpfNumbers.charAt(10))) {
-      return false;
-    }
-    
-    return true;
-  };
-
-  /**
-   * Valida se o nome completo foi preenchido (mínimo nome + sobrenome)
-   */
-  const validateFullName = (fullName: string): boolean => {
-    const trimmed = fullName.trim();
-    
-    // Deve ter pelo menos algum conteúdo
-    if (!trimmed || trimmed.length === 0) {
-      return false;
-    }
-    
-    // Dividir por espaços e filtrar strings vazias
-    const parts = trimmed.split(/\s+/).filter(part => part.length > 0);
-    
-    // Deve ter pelo menos 2 palavras (nome + sobrenome)
-    if (parts.length < 2) {
-      return false;
-    }
-    
-    // Cada parte deve ter pelo menos 2 caracteres
-    for (const part of parts) {
-      if (part.length < 2) {
-        return false;
-      }
-    }
-    
-    return true;
-  };
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const cpfNumbers = cpf.replace(/\D/g, '');
-    
-    // Validar nome completo primeiro
-    if (!name || name.trim() === '') {
-      toast.error('Nome completo é obrigatório');
-      return;
-    }
-    
-    // Validar se é nome completo (nome + sobrenome)
-    if (!validateFullName(name)) {
-      toast.error('Por favor, informe seu nome completo (nome e sobrenome)');
-      return;
-    }
-    
-    // Validar formato do CPF
     if (cpfNumbers.length !== 11) {
       toast.error('CPF deve conter 11 dígitos');
       return;
     }
     
-    // Validar CPF (dígitos verificadores)
-    if (!validateCPF(cpf)) {
-      toast.error('CPF inválido. Verifique os dígitos e tente novamente.');
+    // Validar nome
+    if (!name || name.trim() === '') {
+      toast.error('Nome é obrigatório');
       return;
     }
     

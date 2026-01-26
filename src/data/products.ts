@@ -41,6 +41,15 @@ import videoBarbeador3 from '@/assets/video-product/Kit Barbeador e Aparador de 
 import videoBarbeador4 from '@/assets/video-product/Kit Barbeador e Aparador de Pelos Cuidados Masculinos 4.mp4';
 import videoBarbeador5 from '@/assets/video-product/Kit Barbeador e Aparador de Pelos Cuidados Masculinos 5.mp4';
 import videoBarbeador6 from '@/assets/video-product/Kit Barbeador e Aparador de Pelos Cuidados Masculinos 6.mp4';
+// Imagens dos tênis - arquivos em formato .webp
+import tenis1 from '@/assets/products/tenis/tenis1.webp';
+import tenis2 from '@/assets/products/tenis/tenis2.webp';
+import tenis3 from '@/assets/products/tenis/tenis3.webp';
+import tenis4 from '@/assets/products/tenis/tenis4.webp';
+import tenis5 from '@/assets/products/tenis/tenis5.webp';
+import tenis6 from '@/assets/products/tenis/tenis6.webp';
+import tenis7 from '@/assets/products/tenis/tenis7.webp';
+import kitCanetas from '@/assets/products/kit canetas.jpg';
 import { Product, Category, ProductReview, CreatorVideo } from '@/types/product';
 
 export const categories: Category[] = [
@@ -524,51 +533,87 @@ GG (Peito: 124cm | Comprimento: 76cm)`,
   {
     id: '9',
     name: 'Tênis Masculino Básico Casual',
-    price: 39.90,
-    originalPrice: 129.90,
+    price: 27.90,
+    originalPrice: 74.90,
     image: tenisCasual,
-    rating: 4.4,
-    soldCount: 6780,
-    viewCount: 42000,
-    likesCount: 2890,
+    images: [
+      tenisCasual,
+      tenis1,
+      tenis2,
+      tenis3,
+      tenis4,
+      tenis5,
+      tenis6,
+      tenis7,
+    ],
+    rating: 4.7,
+    soldCount: 12450,
+    viewCount: 89000,
+    likesCount: 5670,
     isHotDeal: true,
     freeShipping: true,
     category: 'Moda',
     brand: 'UrbanStep',
-    sizes: ['39', '40', '41', '42', '43', '44'],
-    colors: ['Branco'],
-    description: `Tênis Masculino Básico Casual com design clássico e confortável. Perfeito para o dia a dia.
+    sizes: ['34', '35', '36', '37', '38', '39', '40', '41', '42', '43'],
+    colors: ['Branco', 'Preto'],
+    description: `TÊNIS CASUAL UNISSEX – ESTILO, CONFORTO E VERSATILIDADE!
+Procurando um tênis confortável e moderno para o dia a dia? Esse modelo é a escolha certa!
+Com design minimalista e sem logo, ele combina com tudo — perfeito para usar no trabalho, na escola, na academia ou nos passeios.
+Seu acabamento é feito com material resistente e macio, garantindo conforto o dia todo.
+A palmilha é leve e acolchoada, enquanto o solado de borracha antiderrapante proporciona firmeza e segurança a cada passo.
 
-**Características Técnicas:**
-• Material superior: Couro sintético
-• Solado: EVA com borracha
-• Palmilha: Removível e confortável
-• Entressola: EVA de média densidade
-• Solado externo: Borracha antiderrapante
-• Peso: 320g (tamanho 42)
-• Tipo: Casual
-• Indicado para: Uso diário, trabalho, passeios
+**DESTAQUES DO PRODUTO:**
+• Modelo unissex – ideal para homens e mulheres
+• Design clean e moderno, sem logo
+• Leve, confortável e fácil de limpar
+• Palmilha macia e solado antiderrapante
+• Combina com looks casuais e esportivos
 
-**Tamanhos Disponíveis:**
-39 a 44 (numeração brasileira)`,
+**TABELA DE TAMANHOS (medida interna aproximada):**
+34 — 23,6 CM
+35 — 24,2 CM
+36 — 24,8 CM
+37 — 25,5 CM
+38 — 26,2 CM
+39 — 26,9 CM
+40 — 27,4 CM
+41 — 28,0 CM
+42 — 28,8 CM
+43 — 29,3 CM
+
+**IDEAL PARA:**
+• Passeios e uso diário
+• Escola, trabalho ou academia
+• Quem busca conforto com estilo
+
+**ENVIO IMEDIATO** — Seu pedido é despachado em até 24h úteis após a confirmação do pagamento!`,
     reviews: [
       {
         id: 'r20',
-        userName: 'Bruno Carvalho',
-        userInitials: 'BC',
-        rating: 4,
-        itemVariant: 'Branco 42',
-        text: 'Tênis básico e confortável, perfeito para o dia a dia. Preço justo.',
-        date: '2024-01-30',
+        userName: 'D**I A**s',
+        userInitials: 'DA',
+        rating: 5,
+        itemVariant: 'Branco, 41',
+        text: 'Podem comprar, vc não vai se arrepender, chegou tudo certinho. Tamanho: 41 confortável demais',
+        date: '2025-12-31',
       },
       {
         id: 'r21',
-        userName: 'Daniel Pereira',
-        userInitials: 'DP',
+        userName: 'v**a a**l',
+        userInitials: 'VA',
         rating: 5,
-        itemVariant: 'Branco 43',
-        text: 'Excelente tênis! Confortável, durável e com bom acabamento. Recomendo!',
-        date: '2024-01-27',
+        itemVariant: 'Branco, 35',
+        text: 'Forma e tamanho: 35 Aroma: Bom Usabilidade: Boa Cor: Branco Chegou certinho dentro do prazo previsto amei a compra parabéns ao vendedor e ao entregador 👋',
+        date: '2025-11-25',
+      },
+      {
+        id: 'r22',
+        userName: 'G**i R**',
+        userInitials: 'GR',
+        rating: 4,
+        itemVariant: 'Branco, 37',
+        text: 'Veio no tamanho certo. Pelo valor pago a qualidade é de se esperar, (mas é bom) ainda não usei.',
+        date: '2026-01-14',
       },
     ] as ProductReview[],
   },
@@ -1631,7 +1676,7 @@ Montagem de móveis, reparos domésticos, trabalhos em madeira, instalações si
   {
     id: '28',
     name: 'Kit Barbeador e Aparador de Pelos Cuidados Masculinos',
-    price: 9.90,
+    price: 18.90,
     originalPrice: 29.99,
     image: kitBarbeadorAparador,
     rating: 4.8,
@@ -1752,5 +1797,20 @@ Barba, bigode, pelos corporais, cabelo, pelos nasais
         date: '2024-02-08',
       },
     ] as ProductReview[],
+  },
+  {
+    id: 'kit-canetas',
+    name: 'Kit de 24 Canetas Marcador Permanente Ponta Dupla Touch Coloridas para Desenho Profissional',
+    price: 9.20,
+    image: kitCanetas,
+    rating: 4.8,
+    soldCount: 3250,
+    viewCount: 12000,
+    likesCount: 890,
+    isHotDeal: false,
+    freeShipping: false,
+    category: 'Escritório',
+    brand: 'Premium',
+    description: 'Kit de 24 Canetas Marcador Permanente Ponta Dupla Touch Coloridas para Desenho Profissional. Perfeito para artistas, estudantes e profissionais que buscam qualidade e variedade de cores.',
   },
 ];

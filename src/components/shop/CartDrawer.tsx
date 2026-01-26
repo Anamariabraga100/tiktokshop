@@ -10,6 +10,7 @@ import { PixPaymentModal } from './PixPaymentModal';
 import { CardPaymentModal } from './CardPaymentModal';
 import { toast } from 'sonner';
 import { trackInitiateCheckout } from '@/lib/facebookPixel';
+import { products } from '@/data/products';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,7 +28,7 @@ interface CartDrawerProps {
 }
 
 export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
-  const { items, removeFromCart, updateQuantity, totalPrice, clearCart } = useCart();
+  const { items, removeFromCart, updateQuantity, totalPrice, clearCart, addToCart } = useCart();
   const { activeCoupon, couponTimeRemaining, getApplicableCoupon, isFirstPurchase, markPurchaseCompleted, activateCoupon } = useCoupons();
   const { customerData, hasAddress, hasCPF, updateAddress, updateCPF } = useCustomer();
   const [showAddressModal, setShowAddressModal] = useState(false);
@@ -40,9 +41,13 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
   const [showPixModal, setShowPixModal] = useState(false);
   const [showCardModal, setShowCardModal] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'pix' | 'card'>('pix');
-  // Limite para frete grátis + brinde
+  const [hasKitCanetas, setHasKitCanetas] = useState(false);
+  const [selectedShipping, setSelectedShipping] = useState<'standard' | 'priority'>('standard');
+  // Limite para frete grátis
   const FREE_SHIPPING_THRESHOLD = 30;
   const SHIPPING_PRICE = 7.90;
+  const PRIORITY_SHIPPING_PRICE = 12.90;
+  const PRIORITY_UPGRADE_PRICE = 4.99; // Valor adicional para frete prioritário quando já tem frete grátis
 
   // Outros cupons percentuais são aplicados se ativos
   const applicableCoupon = getApplicableCoupon(totalPrice);
@@ -73,8 +78,8 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  // Calcular previsão de entrega (5-7 dias úteis) e frete
-  const { deliveryInfo, shippingPrice, formattedShippingPrice, hasFreeShipping, hasGift } = useMemo(() => {
+  // Calcular previsão de entrega e frete
+  const { deliveryInfo, shippingPrice, formattedShippingPrice, hasFreeShipping, priorityDeliveryInfo } = useMemo(() => {
     // ✅ Mostrar frete apenas depois de preencher informações de entrega
     if (!hasAddress) {
       // Sem endereço, não mostrar valor do frete
@@ -83,7 +88,7 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
         shippingPrice: 0, // Não incluir no cálculo até preencher endereço
         formattedShippingPrice: '—', // Mostrar traço indicando que precisa preencher
         hasFreeShipping: false,
-        hasGift: false
+        priorityDeliveryInfo: null
       };
     }
 
@@ -95,8 +100,9 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
       : 0;
     const currentPriceAfterCoupon = totalPrice - couponDiscountForShipping;
 
-    // Calcular intervalo de entrega (5-7 dias úteis a partir de hoje)
     const today = new Date();
+    
+    // Calcular intervalo de entrega padrão (5-7 dias úteis)
     const minDays = 5;
     const maxDays = 7;
     
@@ -136,22 +142,60 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
     const monthName = maxDate.toLocaleDateString('pt-BR', { month: 'long' });
     const month = monthName.charAt(0).toUpperCase() + monthName.slice(1);
     
-    // Calcular frete: R$30 = frete grátis + brinde, abaixo = R$7,90
-    const calculatedFreeShipping = currentPriceAfterCoupon >= FREE_SHIPPING_THRESHOLD;
-    const calculatedGift = calculatedFreeShipping;
-    const calculatedPrice = calculatedFreeShipping ? 0 : SHIPPING_PRICE;
-    localStorage.setItem('currentShippingPrice', calculatedPrice.toString());
+    // Calcular intervalo de entrega prioritário (até 3 dias úteis)
+    const priorityMaxDays = 3;
+    let priorityDaysAdded = 0;
+    let priorityCount = 0;
+    while (priorityDaysAdded < priorityMaxDays && priorityCount < 10) {
+      const checkDate = new Date(today);
+      checkDate.setDate(today.getDate() + priorityCount);
+      const dayOfWeek = checkDate.getDay();
+      if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+        priorityDaysAdded++;
+      }
+      priorityCount++;
+    }
     
-    const formatted = calculatedFreeShipping ? 'Grátis' : calculatedPrice.toFixed(2).replace('.', ',');
+    const priorityMaxDate = new Date(today);
+    priorityMaxDate.setDate(today.getDate() + priorityCount);
+    const priorityMaxDay = priorityMaxDate.getDate();
+    const priorityMonthName = priorityMaxDate.toLocaleDateString('pt-BR', { month: 'long' });
+    const priorityMonth = priorityMonthName.charAt(0).toUpperCase() + priorityMonthName.slice(1);
+    
+    // Calcular frete baseado na seleção
+    const calculatedFreeShipping = currentPriceAfterCoupon >= FREE_SHIPPING_THRESHOLD;
+    
+    let calculatedPrice: number;
+    if (selectedShipping === 'priority') {
+      // Se tem frete grátis, prioritário custa apenas o adicional (R$ 4,99)
+      // Se não tem frete grátis, prioritário custa o valor completo (R$ 12,90)
+      calculatedPrice = calculatedFreeShipping ? PRIORITY_UPGRADE_PRICE : PRIORITY_SHIPPING_PRICE;
+    } else {
+      // Frete padrão: grátis se >= R$ 30, senão R$ 7,90
+      calculatedPrice = calculatedFreeShipping ? 0 : SHIPPING_PRICE;
+    }
+    
+    localStorage.setItem('currentShippingPrice', calculatedPrice.toString());
+    localStorage.setItem('selectedShippingType', selectedShipping);
+    
+    // Formatar preço para exibição
+    let formatted: string;
+    if (selectedShipping === 'priority' && calculatedFreeShipping) {
+      formatted = `+ R$ ${PRIORITY_UPGRADE_PRICE.toFixed(2).replace('.', ',')}`;
+    } else if (calculatedFreeShipping && selectedShipping === 'standard') {
+      formatted = 'Grátis';
+    } else {
+      formatted = `R$ ${calculatedPrice.toFixed(2).replace('.', ',')}`;
+    }
     
     return {
       deliveryInfo: { minDay, maxDay, month, minDate, maxDate },
+      priorityDeliveryInfo: { maxDay: priorityMaxDay, month: priorityMonth, maxDate: priorityMaxDate },
       shippingPrice: calculatedPrice,
       formattedShippingPrice: formatted,
-      hasFreeShipping: calculatedFreeShipping,
-      hasGift: calculatedGift
+      hasFreeShipping: calculatedFreeShipping
     };
-  }, [hasAddress, totalPrice, getApplicableCoupon]);
+  }, [hasAddress, totalPrice, getApplicableCoupon, selectedShipping]);
 
   // Calcular preço final incluindo frete
   const finalPrice = priceAfterPix + shippingPrice;
@@ -284,6 +328,30 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
   const bestItem = items.length > 0 ? items.reduce((best, item) => 
     (item.soldCount || 0) > (best.soldCount || 0) ? item : best
   ) : null;
+
+  // Verificar se o kit de canetas já está no carrinho
+  const kitCanetasProduct = products.find(p => p.id === 'kit-canetas');
+  const kitCanetasInCart = items.some(item => item.id === 'kit-canetas');
+  
+  useEffect(() => {
+    setHasKitCanetas(kitCanetasInCart);
+  }, [kitCanetasInCart]);
+
+  const handleToggleKitCanetas = () => {
+    if (!kitCanetasProduct) return;
+    
+    if (hasKitCanetas) {
+      // Remover do carrinho
+      const kitItem = items.find(item => item.id === 'kit-canetas');
+      if (kitItem) {
+        removeFromCart('kit-canetas');
+      }
+    } else {
+      // Adicionar ao carrinho
+      addToCart(kitCanetasProduct);
+      toast.success('Kit Canetas adicionado ao carrinho!', { id: 'kit-canetas-added' });
+    }
+  };
 
 
   return (
@@ -513,48 +581,175 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
                       })}
                     </div>
 
+                    {/* Upsell - Kit Canetas */}
+                    {kitCanetasProduct && !kitCanetasInCart && (
+                      <div className="bg-muted/30 rounded-xl border border-border p-4">
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={kitCanetasProduct.image}
+                            alt={kitCanetasProduct.name}
+                            className="w-16 h-16 object-cover rounded-lg flex-shrink-0 border border-border"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <h4 className="text-sm font-semibold mb-1 text-foreground">{kitCanetasProduct.name}</h4>
+                            <p className="text-xs text-muted-foreground mb-2">Adicione ao seu pedido</p>
+                            <div className="flex items-center justify-between">
+                              <span className="text-base font-bold text-foreground">
+                                R$ {kitCanetasProduct.price.toFixed(2).replace('.', ',')}
+                              </span>
+                              <button
+                                onClick={handleToggleKitCanetas}
+                                className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-primary/90 transition-colors shadow-sm"
+                              >
+                                Adicionar
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Shipping Information */}
                     {hasAddress && deliveryInfo && (
                       <div className="bg-card rounded-xl border border-border p-4">
                         <div className="space-y-3">
-                          <div className="flex items-center justify-between">
+                          <div className="flex items-center justify-between mb-3">
                             <div className="flex items-center gap-2">
                               <Truck className="w-5 h-5 text-primary" />
+                              <span className="text-sm font-semibold">Opções de entrega</span>
+                            </div>
+                          </div>
+                          
+                          {/* Banner de sucesso quando tem frete grátis */}
+                          {hasFreeShipping && (
+                            <div className="bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-lg p-3 mb-3">
+                              <div className="flex items-center gap-2">
+                                <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-400 flex-shrink-0" />
+                                <p className="text-xs font-semibold text-green-900 dark:text-green-100">
+                                  ✅ Você ganhou frete grátis! (Compras acima de R$ 30,00)
+                                </p>
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Opção de frete padrão */}
+                          <button
+                            onClick={() => setSelectedShipping('standard')}
+                            className={`w-full p-3 border-2 rounded-xl transition-all text-left ${
+                              selectedShipping === 'standard'
+                                ? 'border-primary bg-primary/10 shadow-sm'
+                                : 'border-border/50 bg-card hover:bg-muted/50'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
                               <div>
                                 <p className="text-sm font-semibold">
                                   Receba de {deliveryInfo.minDay} a {deliveryInfo.maxDay} de {deliveryInfo.month}
                                 </p>
                                 <p className="text-xs text-muted-foreground">Envio Padrão</p>
                               </div>
+                              <div className="text-right">
+                                {hasFreeShipping ? (
+                                  <div className="flex flex-col items-end">
+                                    <span className="text-sm font-bold text-success">Grátis</span>
+                                    <span className="text-[10px] text-muted-foreground">Acima de R$ 30</span>
+                                  </div>
+                                ) : (
+                                  <span className="text-sm font-bold">R$ {SHIPPING_PRICE.toFixed(2).replace('.', ',')}</span>
+                                )}
+                              </div>
                             </div>
-                            <div className="text-right">
-                              {hasFreeShipping ? (
-                                <span className="text-sm font-bold text-success">Grátis</span>
-                              ) : (
-                                <span className="text-sm font-bold">R$ {shippingPrice.toFixed(2).replace('.', ',')}</span>
+                            <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center mt-2 ${
+                              selectedShipping === 'standard'
+                                ? 'border-primary bg-primary'
+                                : 'border-border'
+                            }`}>
+                              {selectedShipping === 'standard' && (
+                                <div className="w-2 h-2 rounded-full bg-primary-foreground" />
                               )}
                             </div>
-                          </div>
+                          </button>
+
+                          {/* Opção de frete prioritário */}
+                          <button
+                            onClick={() => setSelectedShipping('priority')}
+                            className={`w-full p-3 border-2 rounded-xl transition-all text-left ${
+                              selectedShipping === 'priority'
+                                ? 'border-primary bg-primary/10 shadow-sm'
+                                : 'border-border/50 bg-card hover:bg-muted/50'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-sm font-semibold">
+                                  Receba até {priorityDeliveryInfo?.maxDay} de {priorityDeliveryInfo?.month}
+                                </p>
+                                <p className="text-xs text-muted-foreground">Frete Prioritário • Até 3 dias úteis</p>
+                              </div>
+                              <div className="text-right">
+                                {hasFreeShipping ? (
+                                  <span className="text-sm font-bold">+ R$ {PRIORITY_UPGRADE_PRICE.toFixed(2).replace('.', ',')}</span>
+                                ) : (
+                                  <span className="text-sm font-bold">R$ {PRIORITY_SHIPPING_PRICE.toFixed(2).replace('.', ',')}</span>
+                                )}
+                              </div>
+                            </div>
+                            <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center mt-2 ${
+                              selectedShipping === 'priority'
+                                ? 'border-primary bg-primary'
+                                : 'border-border'
+                            }`}>
+                              {selectedShipping === 'priority' && (
+                                <div className="w-2 h-2 rounded-full bg-primary-foreground" />
+                              )}
+                            </div>
+                          </button>
                           
-                          {/* Barra de progresso para frete grátis */}
+                          {/* Barra de progresso para frete grátis - Destacada */}
                           {!hasFreeShipping && (
-                            <div className="space-y-2 pt-2 border-t border-border">
-                              <div className="flex items-center justify-between text-xs">
-                                <span className="text-muted-foreground">
-                                  Faltam R$ {(FREE_SHIPPING_THRESHOLD - priceAfterCoupon).toFixed(2).replace('.', ',')} para frete grátis + brinde
-                                </span>
-                                <span className="font-semibold text-primary">
+                            <div className="space-y-3 pt-3 border-t border-border bg-blue-50/50 dark:bg-blue-950/10 rounded-lg p-3 -mx-1">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <Truck className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                                  <div className="flex flex-col">
+                                    <span className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+                                      Faltam R$ {(FREE_SHIPPING_THRESHOLD - priceAfterCoupon).toFixed(2).replace('.', ',')} para frete grátis!
+                                    </span>
+                                    <span className="text-xs text-blue-700 dark:text-blue-300">
+                                      Compras acima de R$ 30,00 ganham frete grátis
+                                    </span>
+                                  </div>
+                                </div>
+                                <span className="text-sm font-bold text-blue-600 dark:text-blue-400">
                                   {Math.min(100, Math.round((priceAfterCoupon / FREE_SHIPPING_THRESHOLD) * 100))}%
                                 </span>
                               </div>
-                              <div className="w-full bg-muted rounded-full h-2.5 overflow-hidden">
+                              <div className="w-full bg-blue-100 dark:bg-blue-900/30 rounded-full h-3 overflow-hidden">
                                 <div 
-                                  className="h-full bg-gradient-to-r from-primary to-tiktok-pink rounded-full transition-all duration-300 ease-out"
+                                  className="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transition-all duration-500 ease-out"
                                   style={{ 
                                     width: `${Math.min(100, Math.round((priceAfterCoupon / FREE_SHIPPING_THRESHOLD) * 100))}%` 
                                   }}
                                 />
                               </div>
+                              {/* Sugestão para adicionar mais uma unidade */}
+                              {items.length > 0 && (FREE_SHIPPING_THRESHOLD - priceAfterCoupon) <= 15 && (FREE_SHIPPING_THRESHOLD - priceAfterCoupon) > 0 && (
+                                <div className="flex items-center justify-between pt-2 border-t border-blue-200 dark:border-blue-800">
+                                  <div className="flex-1">
+                                    <p className="text-xs text-blue-700 dark:text-blue-300 mb-1">
+                                      Adicione mais uma unidade e ganhe frete grátis! (Compras acima de R$ 30,00)
+                                    </p>
+                                    {bestItem && (
+                                      <button
+                                        onClick={() => updateQuantity(bestItem.id, bestItem.quantity + 1)}
+                                        className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:underline flex items-center gap-1 transition-colors"
+                                      >
+                                        + Adicionar mais 1x {bestItem.name.length > 30 ? bestItem.name.substring(0, 30) + '...' : bestItem.name}
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
@@ -614,26 +809,21 @@ export const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
 
                         {/* Frete */}
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">Frete</span>
+                          <span className="text-muted-foreground">
+                            {selectedShipping === 'priority' && hasFreeShipping 
+                              ? 'Frete Prioritário (adicional)' 
+                              : 'Frete'}
+                          </span>
                           <span className="font-medium">
-                            {hasFreeShipping ? (
+                            {selectedShipping === 'priority' && hasFreeShipping ? (
+                              <span>+ R$ {PRIORITY_UPGRADE_PRICE.toFixed(2).replace('.', ',')}</span>
+                            ) : hasFreeShipping ? (
                               <span className="text-success">Grátis</span>
                             ) : (
                               <span>R$ {shippingPrice.toFixed(2).replace('.', ',')}</span>
                             )}
                           </span>
                         </div>
-                        
-                        {/* Brinde quando atingir R$30 */}
-                        {hasGift && (
-                          <div className="flex justify-between text-success">
-                            <span className="flex items-center gap-1">
-                              <Gift className="w-4 h-4" />
-                              Brinde incluído
-                            </span>
-                            <span className="font-medium">Grátis</span>
-                          </div>
-                        )}
                       </div>
 
                       <div className="mt-4 pt-4 border-t border-border">

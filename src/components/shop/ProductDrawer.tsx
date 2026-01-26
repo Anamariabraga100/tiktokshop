@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Star, Truck, ShoppingCart, Heart, Share2, Shield, Eye, Users, RefreshCw, CreditCard, Clock, Ticket, CheckCircle2, Check, ChevronDown, ArrowLeft } from 'lucide-react';
+import { X, Star, Truck, ShoppingCart, Heart, Share2, Shield, Eye, Users, RefreshCw, CreditCard, Clock, Ticket, CheckCircle2, Check, ChevronDown, ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Product } from '@/types/product';
 import { useCart } from '@/context/CartContext';
 import { useCoupons } from '@/context/CouponContext';
@@ -29,6 +29,7 @@ export const ProductDrawer = memo(({ product, isOpen, onClose, onBuyNow, onProdu
   const [isLiked, setIsLiked] = useState(false);
   const [showFullDescription, setShowFullDescription] = useState(false);
   const [justAdded, setJustAdded] = useState(false);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   // Get similar products (same category first, then other categories if needed to reach 8 items)
   const similarProducts = useMemo(() => {
@@ -220,6 +221,8 @@ export const ProductDrawer = memo(({ product, isOpen, onClose, onBuyNow, onProdu
     if (isOpen && product && drawerRef.current) {
       // Scroll suave para o topo do drawer
       drawerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+      // Resetar índice da imagem quando o produto mudar
+      setCurrentImageIndex(0);
     }
   }, [product?.id, isOpen]);
 
@@ -420,43 +423,104 @@ export const ProductDrawer = memo(({ product, isOpen, onClose, onBuyNow, onProdu
 
             {/* Content Container */}
             <div className="px-4 md:px-6 pb-2">
-              {/* Product Image */}
+              {/* Product Image Gallery */}
               <div className="relative aspect-square mx-auto w-full max-w-sm rounded-2xl overflow-hidden bg-muted mb-5 shadow-sm">
-              <img
-                src={product.image}
-                alt={product.name}
-                className="w-full h-full object-cover"
-                loading="lazy"
-                decoding="async"
-              />
+                {/* Images */}
+                {(() => {
+                  const images = product.images && product.images.length > 0 ? product.images : [product.image];
+                  return (
+                    <>
+                      <AnimatePresence mode="wait">
+                        <motion.img
+                          key={currentImageIndex}
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          transition={{ duration: 0.2 }}
+                          src={images[currentImageIndex]}
+                          alt={product.name}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                          decoding="async"
+                        />
+                      </AnimatePresence>
+                      
+                      {/* Navigation arrows - only show if multiple images */}
+                      {images.length > 1 && (
+                        <>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCurrentImageIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1));
+                            }}
+                            className="absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-foreground/60 backdrop-blur-sm text-background hover:bg-foreground/80 transition-colors z-10"
+                            aria-label="Imagem anterior"
+                          >
+                            <ChevronLeft className="w-5 h-5" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCurrentImageIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1));
+                            }}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-foreground/60 backdrop-blur-sm text-background hover:bg-foreground/80 transition-colors z-10"
+                            aria-label="Próxima imagem"
+                          >
+                            <ChevronRight className="w-5 h-5" />
+                          </button>
+                          
+                          {/* Image indicators */}
+                          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
+                            {images.map((_, index) => (
+                              <button
+                                key={index}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setCurrentImageIndex(index);
+                                }}
+                                className={`h-1.5 rounded-full transition-all ${
+                                  index === currentImageIndex
+                                    ? 'bg-background w-6'
+                                    : 'bg-background/50 w-1.5'
+                                }`}
+                                aria-label={`Ir para imagem ${index + 1}`}
+                              />
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </>
+                  );
+                })()}
               
-              {/* Badges */}
-              <div className="absolute top-3 left-3 flex gap-2">
-                {product.isHotDeal && (
-                  <span className="badge-hot-deal">🔥 Oferta Especial</span>
-                )}
-                {product.isNewCustomerDeal && (
-                  <span className="bg-primary text-primary-foreground text-xs font-medium px-2 py-1 rounded">
-                    Desconto para novos clientes
-                  </span>
-                )}
-              </div>
+                {/* Badges */}
+                <div className="absolute top-3 left-3 flex gap-2 z-10">
+                  {product.isHotDeal && (
+                    <span className="badge-hot-deal">🔥 Oferta Especial</span>
+                  )}
+                  {product.isNewCustomerDeal && (
+                    <span className="bg-primary text-primary-foreground text-xs font-medium px-2 py-1 rounded">
+                      Desconto para novos clientes
+                    </span>
+                  )}
+                </div>
 
-              {/* Stats overlay */}
-              <div className="absolute bottom-3 left-3 right-3 flex justify-between">
-                <div className="flex gap-2">
-                  {product.viewCount && (
-                    <div className="flex items-center gap-1 bg-foreground/60 backdrop-blur-sm text-background text-xs px-2 py-1 rounded-full">
-                      <Eye className="w-3 h-3" />
-                      {formatNumber(product.viewCount)}
-                    </div>
-                  )}
-                  {product.likesCount && (
-                    <div className="flex items-center gap-1 bg-foreground/60 backdrop-blur-sm text-background text-xs px-2 py-1 rounded-full">
-                      <Heart className="w-3 h-3" />
-                      {formatNumber(product.likesCount)}
-                    </div>
-                  )}
+                {/* Stats overlay */}
+                <div className="absolute bottom-3 left-3 right-3 flex justify-between z-10">
+                  <div className="flex gap-2">
+                    {product.viewCount && (
+                      <div className="flex items-center gap-1 bg-foreground/60 backdrop-blur-sm text-background text-xs px-2 py-1 rounded-full">
+                        <Eye className="w-3 h-3" />
+                        {formatNumber(product.viewCount)}
+                      </div>
+                    )}
+                    {product.likesCount && (
+                      <div className="flex items-center gap-1 bg-foreground/60 backdrop-blur-sm text-background text-xs px-2 py-1 rounded-full">
+                        <Heart className="w-3 h-3" />
+                        {formatNumber(product.likesCount)}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

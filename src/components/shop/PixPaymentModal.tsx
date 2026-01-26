@@ -53,14 +53,29 @@ export const PixPaymentModal = ({ isOpen, onClose, onPaymentComplete }: PixPayme
   // PIX não tem desconto adicional
   const pixDiscount = 0;
 
-  // Limite para frete grátis + brinde
+  // Limite para frete grátis
   const FREE_SHIPPING_THRESHOLD = 30;
   const SHIPPING_PRICE = 7.90;
+  const PRIORITY_SHIPPING_PRICE = 12.90;
+  const PRIORITY_UPGRADE_PRICE = 4.99; // Valor adicional para frete prioritário quando já tem frete grátis
 
-  // Calcular frete: R$30 = frete grátis + brinde, abaixo = R$7,90
+  // Ler tipo de frete selecionado do localStorage
+  const selectedShippingType = typeof window !== 'undefined' 
+    ? (localStorage.getItem('selectedShippingType') || 'standard') as 'standard' | 'priority'
+    : 'standard';
+
+  // Calcular frete: R$30 = frete grátis padrão, prioritário custa +R$4,99 adicional
+  // Se não tem frete grátis: padrão R$7,90 ou prioritário R$12,90
   const hasFreeShipping = priceAfterCoupon >= FREE_SHIPPING_THRESHOLD;
-  const hasGift = hasFreeShipping;
-  const shippingPrice = hasFreeShipping ? 0 : SHIPPING_PRICE;
+  let shippingPrice: number;
+  if (selectedShippingType === 'priority') {
+    // Se tem frete grátis, prioritário custa apenas o adicional (R$ 4,99)
+    // Se não tem frete grátis, prioritário custa o valor completo (R$ 12,90)
+    shippingPrice = hasFreeShipping ? PRIORITY_UPGRADE_PRICE : PRIORITY_SHIPPING_PRICE;
+  } else {
+    // Frete padrão: grátis se >= R$ 30, senão R$ 7,90
+    shippingPrice = hasFreeShipping ? 0 : SHIPPING_PRICE;
+  }
   
   // Calcular valor final incluindo frete
   const finalPrice = priceAfterCoupon + shippingPrice;
